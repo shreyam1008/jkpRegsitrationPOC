@@ -1,0 +1,22 @@
+[project]
+name = "server"
+version = "0.1.0"
+description = "JKP Satsangi Registration POC - FastAPI Backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.135.1",
+    "pydantic==2.12.5",
+    "ruff==0.15.5",
+    "uvicorn==0.41.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
