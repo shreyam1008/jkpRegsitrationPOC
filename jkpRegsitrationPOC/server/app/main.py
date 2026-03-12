@@ -5,13 +5,6 @@ from app import store
 
 app = FastAPI(title="JKP Registration POC")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 @app.post("/api/satsangis", response_model=Satsangi)
 async def create_satsangi(data: SatsangiCreate) -> Satsangi:

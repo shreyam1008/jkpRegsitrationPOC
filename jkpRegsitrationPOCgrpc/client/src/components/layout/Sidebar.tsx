@@ -57,7 +57,7 @@ export default function Sidebar() {
           </div>
           <div>
             <div className="text-sm font-bold text-gray-900 leading-tight">JKP Registration</div>
-            <div className="text-[11px] text-gray-400">Satsangi Management</div>
+            <div className="text-[11px] text-gray-400">GRPC</div>
           </div>
         </div>
 
