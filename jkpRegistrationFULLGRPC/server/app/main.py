@@ -148,8 +148,8 @@ async def grpc_web_proxy(service_path: str, request: Request):
     data_frame = _encode_grpc_web_frame(response_future)
     trailers = "grpc-status:0\r\ngrpc-message:OK\r\n"
     trailer_frame = _encode_grpc_web_frame(trailers.encode(), is_trailer=True)
-    result = data_frame + trailer_frame
 
+    result = data_frame + trailer_frame
     if is_text:
         result = base64.b64encode(result)
 

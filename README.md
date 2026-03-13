@@ -21,36 +21,53 @@ PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE jkp_reg_po
 PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE jkp_reg_poc_grpc;"
 ```
 
-### Run REST Version
+### Run REST Version (2 terminals)
 
 ```bash
-# Terminal 1: Server (:8001)
-cd jkpRegsitrationPOC/server && uv sync && uv run python -m uvicorn app.main:app --port 8001
+# Terminal 1: FastAPI server (:8001)
+cd jkpRegsitrationPOC/server
+uv sync
+uv run python -m uvicorn app.main:app --port 8001
 
-# Terminal 2: Client (:5173)
-cd jkpRegsitrationPOC/client && bun install && bun run dev
+# Terminal 2: React client (:5173)
+cd jkpRegsitrationPOC/client
+bun install
+bun run dev
 ```
 
-Open **http://localhost:5173**
+Open **http://localhost:5173** — browser talks directly to FastAPI via `fetch()`
 
-### Run gRPC Version
+### Run gRPC Version (3 terminals)
 
 ```bash
-# Terminal 1: gRPC Server (:50051) + grpc-web Proxy (:8080)
-cd jkpRegistrationFULLGRPC/server && uv sync && uv run python -m uvicorn app.main:app --port 8080
+# Terminal 1: Native gRPC server (:50051) — the real backend
+cd jkpRegistrationFULLGRPC/server
+uv sync
+uv run python -m app.grpc_server
 
-# Terminal 2: Client (:5174)
-cd jkpRegistrationFULLGRPC/client && bun install && bun run dev
+# Terminal 2: grpc-web proxy (:8080) — translates browser HTTP → gRPC
+cd jkpRegistrationFULLGRPC/server
+uv run python -m uvicorn app.main:app --port 8080
+
+# Terminal 3: React client (:5174)
+cd jkpRegistrationFULLGRPC/client
+bun install
+bun run dev
 ```
 
-Open **http://localhost:5174**
+Open **http://localhost:5174** — browser sends grpc-web to proxy (:8080) which forwards to gRPC server (:50051)
 
-### Run Benchmarks
+> **Why 3 terminals?** Browsers can't speak native gRPC. The proxy translates grpc-web frames into real gRPC calls. Without Terminal 1 (gRPC server), the proxy has nothing to forward to.
+
+### Run Benchmarks (16-test suite)
 
 ```bash
-# Start REST server (:8001) and gRPC server (:50051) first, then:
-cd jkpRegistrationFULLGRPC/server && uv run python ../../benchmarks/bench_standalone.py
+# Start REST server (:8001) and gRPC server (:50051) first (no proxy/client needed), then:
+cd jkpRegistrationFULLGRPC/server
+uv run python ../../benchmarks/bench_robust.py
 ```
+
+Results are written to `benchmarks/results.json` and reported in [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md).
 
 ---
 
@@ -194,33 +211,41 @@ See [grpc_instruction.md](grpc_instruction.md) for the full technical deep-dive.
 
 ## Benchmark Categories
 
-The benchmark suite (`benchmarks/bench_standalone.py`) tests **10 categories**:
+The benchmark suite (`benchmarks/bench_robust.py`) tests **16 categories** — 8 synthetic + 8 real-life:
 
-| # | Category | Description |
-|---|----------|-------------|
-| 1 | **Latency** | Single-request round-trip (create + search), p50/p95/p99 |
-| 2 | **Throughput** | Sustained requests/sec for reads and writes |
-| 3 | **Payload Size** | Wire bytes for 1, 10, 100, 1000 records |
-| 4 | **Serialization** | Encode/decode speed for 10,000 messages |
-| 5 | **Concurrency** | 5 / 10 / 25 / 50 / 100 simultaneous clients |
-| 6 | **Streaming** | gRPC server-streaming vs REST batch |
-| 7 | **Connection** | New connection vs reused connection overhead |
-| 8 | **Memory** | Client-side RAM consumption per request |
-| 9 | **Slow Network** | Simulated 10 / 50 / 100 / 200ms added latency |
-| 10 | **Mixed Workload** | Realistic 70% read / 30% write pattern |
+| # | Category | Type | Description |
+|---|----------|------|-------------|
+| A1 | **Latency** | Synthetic | Single-request (create/search/list), p50/p95/p99 |
+| A2 | **Throughput** | Synthetic | Sustained requests/sec for reads and writes |
+| A3 | **Payload Size** | Synthetic | Wire bytes for 1–1,000 records |
+| A4 | **Serialization** | Synthetic | Encode/decode speed for 10,000 messages |
+| A5 | **Concurrency** | Synthetic | 5 / 10 / 25 simultaneous clients |
+| A6 | **Streaming** | Synthetic | gRPC server-streaming vs REST batch |
+| A7 | **Connection** | Synthetic | New connection vs reused connection overhead |
+| A8 | **Memory** | Synthetic | Client-side RAM consumption per request |
+| B9 | **Page Load** | Real-life | 3 sequential calls per page (search + create + re-fetch) |
+| B10 | **Bursty Traffic** | Real-life | Idle → sudden burst (registration desk waves) |
+| B11 | **Variable Payload** | Real-life | Minimal (3 fields) vs full (30+ fields) |
+| B12 | **Network Jitter** | Real-life | Random 0–200ms delays (bad WiFi/mobile) |
+| B13 | **Long Session** | Real-life | 300+ requests, check for latency drift |
+| B14 | **Error Recovery** | Real-life | Bad requests → good requests, measure recovery |
+| B15 | **Concurrent Mixed** | Real-life | 10 users, 80/20 read/write |
+| B16 | **Cold Start** | Real-life | First request after idle vs warmed-up connection |
 
-### Expected Results
+### Actual Results (measured 2026-03-13)
 
 | Metric | REST | gRPC | Winner |
 |--------|------|------|--------|
-| Latency (p50) | ~2-5ms | ~0.5-2ms | **gRPC** (2-4x) |
-| Throughput | ~1-3K rps | ~5-15K rps | **gRPC** (3-5x) |
-| Payload (1 record) | ~800-1200B | ~200-400B | **gRPC** (3-5x smaller) |
-| Serialization (10K) | ~50-100ms | ~5-15ms | **gRPC** (5-10x) |
-| 100 clients | Degrades | Stable | **gRPC** |
-| Human readable | Excellent | Poor | **REST** |
-| Browser native | Yes | Needs proxy | **REST** |
-| Debugging | Easy (devtools) | Hard (binary) | **REST** |
+| Payload (1 record) | 927 B | 389 B | **gRPC** (2.4x smaller) |
+| Serialization (10K enc+dec) | 383 ms | 39 ms | **gRPC** (9.9x faster) |
+| Concurrent throughput (10 clients) | 6.9 rps | 11.7 rps | **gRPC** (1.7x) |
+| Bursty traffic p99 | 347 ms | 120 ms | **gRPC** (2.9x) |
+| Network jitter consistency (stdev) | 82 ms | 38 ms | **gRPC** (2.2x) |
+| Sequential throughput | 20 rps | 11.6 rps | **REST** (1.7x) |
+| Error recovery | 25 ms | 64 ms | **REST** (2.6x) |
+| Long-session stability (drift) | +4.6 ms | +54 ms | **REST** |
+
+Full results with all 16 benchmarks: [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md)
 
 ---
 

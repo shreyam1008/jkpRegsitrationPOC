@@ -4,129 +4,142 @@
  * These correspond 1:1 with the messages in proto/satsangi.proto.
  * Uses google-protobuf's BinaryWriter/BinaryReader for wire-format
  * serialization so the browser speaks real protobuf over grpc-web.
+ *
+ * NOTE: google-protobuf's field access methods (getField, setField,
+ * getFieldWithDefault, etc.) are STATIC on jspb.Message, not instance
+ * methods.  Every class must call jspb.Message.initialize() in its
+ * constructor.
  */
 
 import * as jspb from 'google-protobuf'
 
+// Shorter aliases for the verbose static helpers
+const _get    = jspb.Message.getFieldWithDefault
+const _getOpt = jspb.Message.getField
+const _set    = jspb.Message.setField
+const _init   = jspb.Message.initialize
+
 // ---------------------------------------------------------------------------
-// SatsangiCreate message
+// SatsangiCreate message  (proto field numbers 1-31)
 // ---------------------------------------------------------------------------
 
 export class SatsangiCreate extends jspb.Message {
-  getFirstName(): string { return this.getFieldWithDefault(1, '') as string }
-  setFirstName(v: string) { this.setField(1, v) }
+  constructor() { super(); _init(this, [], 0, -1, null, null) }
 
-  getLastName(): string { return this.getFieldWithDefault(2, '') as string }
-  setLastName(v: string) { this.setField(2, v) }
+  getFirstName(): string { return _get(this, 1, '') as string }
+  setFirstName(v: string) { _set(this, 1, v) }
 
-  getPhoneNumber(): string { return this.getFieldWithDefault(3, '') as string }
-  setPhoneNumber(v: string) { this.setField(3, v) }
+  getLastName(): string { return _get(this, 2, '') as string }
+  setLastName(v: string) { _set(this, 2, v) }
 
-  getAge(): number | undefined { return this.getField(4) as number | undefined }
-  setAge(v: number) { this.setField(4, v) }
-  hasAge(): boolean { return this.hasField(4) }
+  getPhoneNumber(): string { return _get(this, 3, '') as string }
+  setPhoneNumber(v: string) { _set(this, 3, v) }
 
-  getDateOfBirth(): string | undefined { return this.getField(5) as string | undefined }
-  setDateOfBirth(v: string) { this.setField(5, v) }
-  hasDateOfBirth(): boolean { return this.hasField(5) }
+  getAge(): number | undefined { return _getOpt(this, 4) as number | undefined }
+  setAge(v: number) { _set(this, 4, v) }
+  hasAge(): boolean { return _getOpt(this, 4) != null }
 
-  getPan(): string | undefined { return this.getField(6) as string | undefined }
-  setPan(v: string) { this.setField(6, v) }
-  hasPan(): boolean { return this.hasField(6) }
+  getDateOfBirth(): string | undefined { return _getOpt(this, 5) as string | undefined }
+  setDateOfBirth(v: string) { _set(this, 5, v) }
+  hasDateOfBirth(): boolean { return _getOpt(this, 5) != null }
 
-  getGender(): string | undefined { return this.getField(7) as string | undefined }
-  setGender(v: string) { this.setField(7, v) }
-  hasGender(): boolean { return this.hasField(7) }
+  getPan(): string | undefined { return _getOpt(this, 6) as string | undefined }
+  setPan(v: string) { _set(this, 6, v) }
+  hasPan(): boolean { return _getOpt(this, 6) != null }
 
-  getSpecialCategory(): string | undefined { return this.getField(8) as string | undefined }
-  setSpecialCategory(v: string) { this.setField(8, v) }
-  hasSpecialCategory(): boolean { return this.hasField(8) }
+  getGender(): string | undefined { return _getOpt(this, 7) as string | undefined }
+  setGender(v: string) { _set(this, 7, v) }
+  hasGender(): boolean { return _getOpt(this, 7) != null }
 
-  getNationality(): string { return this.getFieldWithDefault(9, 'Indian') as string }
-  setNationality(v: string) { this.setField(9, v) }
+  getSpecialCategory(): string | undefined { return _getOpt(this, 8) as string | undefined }
+  setSpecialCategory(v: string) { _set(this, 8, v) }
+  hasSpecialCategory(): boolean { return _getOpt(this, 8) != null }
 
-  getGovtIdType(): string | undefined { return this.getField(10) as string | undefined }
-  setGovtIdType(v: string) { this.setField(10, v) }
-  hasGovtIdType(): boolean { return this.hasField(10) }
+  getNationality(): string { return _get(this, 9, 'Indian') as string }
+  setNationality(v: string) { _set(this, 9, v) }
 
-  getGovtIdNumber(): string | undefined { return this.getField(11) as string | undefined }
-  setGovtIdNumber(v: string) { this.setField(11, v) }
-  hasGovtIdNumber(): boolean { return this.hasField(11) }
+  getGovtIdType(): string | undefined { return _getOpt(this, 10) as string | undefined }
+  setGovtIdType(v: string) { _set(this, 10, v) }
+  hasGovtIdType(): boolean { return _getOpt(this, 10) != null }
 
-  getIdExpiryDate(): string | undefined { return this.getField(12) as string | undefined }
-  setIdExpiryDate(v: string) { this.setField(12, v) }
-  hasIdExpiryDate(): boolean { return this.hasField(12) }
+  getGovtIdNumber(): string | undefined { return _getOpt(this, 11) as string | undefined }
+  setGovtIdNumber(v: string) { _set(this, 11, v) }
+  hasGovtIdNumber(): boolean { return _getOpt(this, 11) != null }
 
-  getIdIssuingCountry(): string | undefined { return this.getField(13) as string | undefined }
-  setIdIssuingCountry(v: string) { this.setField(13, v) }
-  hasIdIssuingCountry(): boolean { return this.hasField(13) }
+  getIdExpiryDate(): string | undefined { return _getOpt(this, 12) as string | undefined }
+  setIdExpiryDate(v: string) { _set(this, 12, v) }
+  hasIdExpiryDate(): boolean { return _getOpt(this, 12) != null }
 
-  getNickName(): string | undefined { return this.getField(14) as string | undefined }
-  setNickName(v: string) { this.setField(14, v) }
-  hasNickName(): boolean { return this.hasField(14) }
+  getIdIssuingCountry(): string | undefined { return _getOpt(this, 13) as string | undefined }
+  setIdIssuingCountry(v: string) { _set(this, 13, v) }
+  hasIdIssuingCountry(): boolean { return _getOpt(this, 13) != null }
 
-  getPrintOnCard(): boolean { return this.getFieldWithDefault(15, false) as boolean }
-  setPrintOnCard(v: boolean) { this.setField(15, v) }
+  getNickName(): string | undefined { return _getOpt(this, 14) as string | undefined }
+  setNickName(v: string) { _set(this, 14, v) }
+  hasNickName(): boolean { return _getOpt(this, 14) != null }
 
-  getIntroducer(): string | undefined { return this.getField(16) as string | undefined }
-  setIntroducer(v: string) { this.setField(16, v) }
-  hasIntroducer(): boolean { return this.hasField(16) }
+  getPrintOnCard(): boolean { return _get(this, 15, false) as boolean }
+  setPrintOnCard(v: boolean) { _set(this, 15, v) }
 
-  getCountry(): string { return this.getFieldWithDefault(17, 'India') as string }
-  setCountry(v: string) { this.setField(17, v) }
+  getIntroducer(): string | undefined { return _getOpt(this, 16) as string | undefined }
+  setIntroducer(v: string) { _set(this, 16, v) }
+  hasIntroducer(): boolean { return _getOpt(this, 16) != null }
 
-  getAddress(): string | undefined { return this.getField(18) as string | undefined }
-  setAddress(v: string) { this.setField(18, v) }
-  hasAddress(): boolean { return this.hasField(18) }
+  getCountry(): string { return _get(this, 17, 'India') as string }
+  setCountry(v: string) { _set(this, 17, v) }
 
-  getCity(): string | undefined { return this.getField(19) as string | undefined }
-  setCity(v: string) { this.setField(19, v) }
-  hasCity(): boolean { return this.hasField(19) }
+  getAddress(): string | undefined { return _getOpt(this, 18) as string | undefined }
+  setAddress(v: string) { _set(this, 18, v) }
+  hasAddress(): boolean { return _getOpt(this, 18) != null }
 
-  getDistrict(): string | undefined { return this.getField(20) as string | undefined }
-  setDistrict(v: string) { this.setField(20, v) }
-  hasDistrict(): boolean { return this.hasField(20) }
+  getCity(): string | undefined { return _getOpt(this, 19) as string | undefined }
+  setCity(v: string) { _set(this, 19, v) }
+  hasCity(): boolean { return _getOpt(this, 19) != null }
 
-  getState(): string | undefined { return this.getField(21) as string | undefined }
-  setState(v: string) { this.setField(21, v) }
-  hasState(): boolean { return this.hasField(21) }
+  getDistrict(): string | undefined { return _getOpt(this, 20) as string | undefined }
+  setDistrict(v: string) { _set(this, 20, v) }
+  hasDistrict(): boolean { return _getOpt(this, 20) != null }
 
-  getPincode(): string | undefined { return this.getField(22) as string | undefined }
-  setPincode(v: string) { this.setField(22, v) }
-  hasPincode(): boolean { return this.hasField(22) }
+  getState(): string | undefined { return _getOpt(this, 21) as string | undefined }
+  setState(v: string) { _set(this, 21, v) }
+  hasState(): boolean { return _getOpt(this, 21) != null }
 
-  getEmergencyContact(): string | undefined { return this.getField(23) as string | undefined }
-  setEmergencyContact(v: string) { this.setField(23, v) }
-  hasEmergencyContact(): boolean { return this.hasField(23) }
+  getPincode(): string | undefined { return _getOpt(this, 22) as string | undefined }
+  setPincode(v: string) { _set(this, 22, v) }
+  hasPincode(): boolean { return _getOpt(this, 22) != null }
 
-  getExCenterSatsangiId(): string | undefined { return this.getField(24) as string | undefined }
-  setExCenterSatsangiId(v: string) { this.setField(24, v) }
-  hasExCenterSatsangiId(): boolean { return this.hasField(24) }
+  getEmergencyContact(): string | undefined { return _getOpt(this, 23) as string | undefined }
+  setEmergencyContact(v: string) { _set(this, 23, v) }
+  hasEmergencyContact(): boolean { return _getOpt(this, 23) != null }
 
-  getIntroducedBy(): string | undefined { return this.getField(25) as string | undefined }
-  setIntroducedBy(v: string) { this.setField(25, v) }
-  hasIntroducedBy(): boolean { return this.hasField(25) }
+  getExCenterSatsangiId(): string | undefined { return _getOpt(this, 24) as string | undefined }
+  setExCenterSatsangiId(v: string) { _set(this, 24, v) }
+  hasExCenterSatsangiId(): boolean { return _getOpt(this, 24) != null }
 
-  getHasRoomInAshram(): boolean { return this.getFieldWithDefault(26, false) as boolean }
-  setHasRoomInAshram(v: boolean) { this.setField(26, v) }
+  getIntroducedBy(): string | undefined { return _getOpt(this, 25) as string | undefined }
+  setIntroducedBy(v: string) { _set(this, 25, v) }
+  hasIntroducedBy(): boolean { return _getOpt(this, 25) != null }
 
-  getEmail(): string | undefined { return this.getField(27) as string | undefined }
-  setEmail(v: string) { this.setField(27, v) }
-  hasEmail(): boolean { return this.hasField(27) }
+  getHasRoomInAshram(): boolean { return _get(this, 26, false) as boolean }
+  setHasRoomInAshram(v: boolean) { _set(this, 26, v) }
 
-  getBanned(): boolean { return this.getFieldWithDefault(28, false) as boolean }
-  setBanned(v: boolean) { this.setField(28, v) }
+  getEmail(): string | undefined { return _getOpt(this, 27) as string | undefined }
+  setEmail(v: string) { _set(this, 27, v) }
+  hasEmail(): boolean { return _getOpt(this, 27) != null }
 
-  getFirstTimer(): boolean { return this.getFieldWithDefault(29, false) as boolean }
-  setFirstTimer(v: boolean) { this.setField(29, v) }
+  getBanned(): boolean { return _get(this, 28, false) as boolean }
+  setBanned(v: boolean) { _set(this, 28, v) }
 
-  getDateOfFirstVisit(): string | undefined { return this.getField(30) as string | undefined }
-  setDateOfFirstVisit(v: string) { this.setField(30, v) }
-  hasDateOfFirstVisit(): boolean { return this.hasField(30) }
+  getFirstTimer(): boolean { return _get(this, 29, false) as boolean }
+  setFirstTimer(v: boolean) { _set(this, 29, v) }
 
-  getNotes(): string | undefined { return this.getField(31) as string | undefined }
-  setNotes(v: string) { this.setField(31, v) }
-  hasNotes(): boolean { return this.hasField(31) }
+  getDateOfFirstVisit(): string | undefined { return _getOpt(this, 30) as string | undefined }
+  setDateOfFirstVisit(v: string) { _set(this, 30, v) }
+  hasDateOfFirstVisit(): boolean { return _getOpt(this, 30) != null }
+
+  getNotes(): string | undefined { return _getOpt(this, 31) as string | undefined }
+  setNotes(v: string) { _set(this, 31, v) }
+  hasNotes(): boolean { return _getOpt(this, 31) != null }
 
   serializeBinary(): Uint8Array {
     const writer = new jspb.BinaryWriter()
@@ -218,109 +231,111 @@ export class SatsangiCreate extends jspb.Message {
 }
 
 // ---------------------------------------------------------------------------
-// Satsangi message (extends SatsangiCreate fields + id + created_at)
+// Satsangi message (proto field numbers 1-33)
 // ---------------------------------------------------------------------------
 
 export class SatsangiMsg extends jspb.Message {
-  getSatsangiId(): string { return this.getFieldWithDefault(1, '') as string }
-  setSatsangiId(v: string) { this.setField(1, v) }
+  constructor() { super(); _init(this, [], 0, -1, null, null) }
 
-  getCreatedAt(): string { return this.getFieldWithDefault(2, '') as string }
-  setCreatedAt(v: string) { this.setField(2, v) }
+  getSatsangiId(): string { return _get(this, 1, '') as string }
+  setSatsangiId(v: string) { _set(this, 1, v) }
 
-  getFirstName(): string { return this.getFieldWithDefault(3, '') as string }
-  setFirstName(v: string) { this.setField(3, v) }
+  getCreatedAt(): string { return _get(this, 2, '') as string }
+  setCreatedAt(v: string) { _set(this, 2, v) }
 
-  getLastName(): string { return this.getFieldWithDefault(4, '') as string }
-  setLastName(v: string) { this.setField(4, v) }
+  getFirstName(): string { return _get(this, 3, '') as string }
+  setFirstName(v: string) { _set(this, 3, v) }
 
-  getPhoneNumber(): string { return this.getFieldWithDefault(5, '') as string }
-  setPhoneNumber(v: string) { this.setField(5, v) }
+  getLastName(): string { return _get(this, 4, '') as string }
+  setLastName(v: string) { _set(this, 4, v) }
 
-  getAge(): number | undefined { return this.getField(6) as number | undefined }
-  setAge(v: number) { this.setField(6, v) }
-  hasAge(): boolean { return this.hasField(6) }
+  getPhoneNumber(): string { return _get(this, 5, '') as string }
+  setPhoneNumber(v: string) { _set(this, 5, v) }
 
-  getDateOfBirth(): string | undefined { return this.getField(7) as string | undefined }
-  setDateOfBirth(v: string) { this.setField(7, v) }
+  getAge(): number | undefined { return _getOpt(this, 6) as number | undefined }
+  setAge(v: number) { _set(this, 6, v) }
+  hasAge(): boolean { return _getOpt(this, 6) != null }
 
-  getPan(): string | undefined { return this.getField(8) as string | undefined }
-  setPan(v: string) { this.setField(8, v) }
+  getDateOfBirth(): string | undefined { return _getOpt(this, 7) as string | undefined }
+  setDateOfBirth(v: string) { _set(this, 7, v) }
 
-  getGender(): string | undefined { return this.getField(9) as string | undefined }
-  setGender(v: string) { this.setField(9, v) }
+  getPan(): string | undefined { return _getOpt(this, 8) as string | undefined }
+  setPan(v: string) { _set(this, 8, v) }
 
-  getSpecialCategory(): string | undefined { return this.getField(10) as string | undefined }
-  setSpecialCategory(v: string) { this.setField(10, v) }
+  getGender(): string | undefined { return _getOpt(this, 9) as string | undefined }
+  setGender(v: string) { _set(this, 9, v) }
 
-  getNationality(): string { return this.getFieldWithDefault(11, '') as string }
-  setNationality(v: string) { this.setField(11, v) }
+  getSpecialCategory(): string | undefined { return _getOpt(this, 10) as string | undefined }
+  setSpecialCategory(v: string) { _set(this, 10, v) }
 
-  getGovtIdType(): string | undefined { return this.getField(12) as string | undefined }
-  setGovtIdType(v: string) { this.setField(12, v) }
+  getNationality(): string { return _get(this, 11, '') as string }
+  setNationality(v: string) { _set(this, 11, v) }
 
-  getGovtIdNumber(): string | undefined { return this.getField(13) as string | undefined }
-  setGovtIdNumber(v: string) { this.setField(13, v) }
+  getGovtIdType(): string | undefined { return _getOpt(this, 12) as string | undefined }
+  setGovtIdType(v: string) { _set(this, 12, v) }
 
-  getIdExpiryDate(): string | undefined { return this.getField(14) as string | undefined }
-  setIdExpiryDate(v: string) { this.setField(14, v) }
+  getGovtIdNumber(): string | undefined { return _getOpt(this, 13) as string | undefined }
+  setGovtIdNumber(v: string) { _set(this, 13, v) }
 
-  getIdIssuingCountry(): string | undefined { return this.getField(15) as string | undefined }
-  setIdIssuingCountry(v: string) { this.setField(15, v) }
+  getIdExpiryDate(): string | undefined { return _getOpt(this, 14) as string | undefined }
+  setIdExpiryDate(v: string) { _set(this, 14, v) }
 
-  getNickName(): string | undefined { return this.getField(16) as string | undefined }
-  setNickName(v: string) { this.setField(16, v) }
+  getIdIssuingCountry(): string | undefined { return _getOpt(this, 15) as string | undefined }
+  setIdIssuingCountry(v: string) { _set(this, 15, v) }
 
-  getPrintOnCard(): boolean { return this.getFieldWithDefault(17, false) as boolean }
-  setPrintOnCard(v: boolean) { this.setField(17, v) }
+  getNickName(): string | undefined { return _getOpt(this, 16) as string | undefined }
+  setNickName(v: string) { _set(this, 16, v) }
 
-  getIntroducer(): string | undefined { return this.getField(18) as string | undefined }
-  setIntroducer(v: string) { this.setField(18, v) }
+  getPrintOnCard(): boolean { return _get(this, 17, false) as boolean }
+  setPrintOnCard(v: boolean) { _set(this, 17, v) }
 
-  getCountry(): string { return this.getFieldWithDefault(19, '') as string }
-  setCountry(v: string) { this.setField(19, v) }
+  getIntroducer(): string | undefined { return _getOpt(this, 18) as string | undefined }
+  setIntroducer(v: string) { _set(this, 18, v) }
 
-  getAddress(): string | undefined { return this.getField(20) as string | undefined }
-  setAddress(v: string) { this.setField(20, v) }
+  getCountry(): string { return _get(this, 19, '') as string }
+  setCountry(v: string) { _set(this, 19, v) }
 
-  getCity(): string | undefined { return this.getField(21) as string | undefined }
-  setCity(v: string) { this.setField(21, v) }
+  getAddress(): string | undefined { return _getOpt(this, 20) as string | undefined }
+  setAddress(v: string) { _set(this, 20, v) }
 
-  getDistrict(): string | undefined { return this.getField(22) as string | undefined }
-  setDistrict(v: string) { this.setField(22, v) }
+  getCity(): string | undefined { return _getOpt(this, 21) as string | undefined }
+  setCity(v: string) { _set(this, 21, v) }
 
-  getState(): string | undefined { return this.getField(23) as string | undefined }
-  setState(v: string) { this.setField(23, v) }
+  getDistrict(): string | undefined { return _getOpt(this, 22) as string | undefined }
+  setDistrict(v: string) { _set(this, 22, v) }
 
-  getPincode(): string | undefined { return this.getField(24) as string | undefined }
-  setPincode(v: string) { this.setField(24, v) }
+  getState(): string | undefined { return _getOpt(this, 23) as string | undefined }
+  setState(v: string) { _set(this, 23, v) }
 
-  getEmergencyContact(): string | undefined { return this.getField(25) as string | undefined }
-  setEmergencyContact(v: string) { this.setField(25, v) }
+  getPincode(): string | undefined { return _getOpt(this, 24) as string | undefined }
+  setPincode(v: string) { _set(this, 24, v) }
 
-  getExCenterSatsangiId(): string | undefined { return this.getField(26) as string | undefined }
-  setExCenterSatsangiId(v: string) { this.setField(26, v) }
+  getEmergencyContact(): string | undefined { return _getOpt(this, 25) as string | undefined }
+  setEmergencyContact(v: string) { _set(this, 25, v) }
 
-  getIntroducedBy(): string | undefined { return this.getField(27) as string | undefined }
-  setIntroducedBy(v: string) { this.setField(27, v) }
+  getExCenterSatsangiId(): string | undefined { return _getOpt(this, 26) as string | undefined }
+  setExCenterSatsangiId(v: string) { _set(this, 26, v) }
 
-  getHasRoomInAshram(): boolean { return this.getFieldWithDefault(28, false) as boolean }
-  setHasRoomInAshram(v: boolean) { this.setField(28, v) }
+  getIntroducedBy(): string | undefined { return _getOpt(this, 27) as string | undefined }
+  setIntroducedBy(v: string) { _set(this, 27, v) }
 
-  getEmail(): string | undefined { return this.getField(29) as string | undefined }
-  setEmail(v: string) { this.setField(29, v) }
+  getHasRoomInAshram(): boolean { return _get(this, 28, false) as boolean }
+  setHasRoomInAshram(v: boolean) { _set(this, 28, v) }
 
-  getBanned(): boolean { return this.getFieldWithDefault(30, false) as boolean }
-  setBanned(v: boolean) { this.setField(30, v) }
+  getEmail(): string | undefined { return _getOpt(this, 29) as string | undefined }
+  setEmail(v: string) { _set(this, 29, v) }
 
-  getFirstTimer(): boolean { return this.getFieldWithDefault(31, false) as boolean }
-  setFirstTimer(v: boolean) { this.setField(31, v) }
+  getBanned(): boolean { return _get(this, 30, false) as boolean }
+  setBanned(v: boolean) { _set(this, 30, v) }
 
-  getDateOfFirstVisit(): string | undefined { return this.getField(32) as string | undefined }
-  setDateOfFirstVisit(v: string) { this.setField(32, v) }
+  getFirstTimer(): boolean { return _get(this, 31, false) as boolean }
+  setFirstTimer(v: boolean) { _set(this, 31, v) }
 
-  getNotes(): string | undefined { return this.getField(33) as string | undefined }
-  setNotes(v: string) { this.setField(33, v) }
+  getDateOfFirstVisit(): string | undefined { return _getOpt(this, 32) as string | undefined }
+  setDateOfFirstVisit(v: string) { _set(this, 32, v) }
+
+  getNotes(): string | undefined { return _getOpt(this, 33) as string | undefined }
+  setNotes(v: string) { _set(this, 33, v) }
 
   serializeBinary(): Uint8Array {
     const writer = new jspb.BinaryWriter()
@@ -415,8 +430,10 @@ export class SatsangiMsg extends jspb.Message {
 // ---------------------------------------------------------------------------
 
 export class SearchRequest extends jspb.Message {
-  getQuery(): string { return this.getFieldWithDefault(1, '') as string }
-  setQuery(v: string) { this.setField(1, v) }
+  constructor() { super(); _init(this, [], 0, -1, null, null) }
+
+  getQuery(): string { return _get(this, 1, '') as string }
+  setQuery(v: string) { _set(this, 1, v) }
 
   serializeBinary(): Uint8Array {
     const writer = new jspb.BinaryWriter()
@@ -442,8 +459,10 @@ export class SearchRequest extends jspb.Message {
 // ---------------------------------------------------------------------------
 
 export class SatsangiList extends jspb.Message {
+  constructor() { super(); _init(this, [], 0, -1, [1], null) }
+
   getSatsangisList(): SatsangiMsg[] {
-    return (this.getField(1) || []) as SatsangiMsg[]
+    return (_getOpt(this, 1) || []) as SatsangiMsg[]
   }
 
   serializeBinary(): Uint8Array {
@@ -509,7 +528,7 @@ export class SatsangiList extends jspb.Message {
         reader.skipField()
       }
     }
-    msg.setField(1, list)
+    _set(msg, 1, list)
     return msg
   }
 }
@@ -519,6 +538,8 @@ export class SatsangiList extends jspb.Message {
 // ---------------------------------------------------------------------------
 
 export class Empty extends jspb.Message {
+  constructor() { super(); _init(this, [], 0, -1, null, null) }
+
   serializeBinary(): Uint8Array {
     return new Uint8Array(0)
   }
