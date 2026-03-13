@@ -3,17 +3,18 @@
 ## Table of Contents
 
 1. [What is gRPC?](#1-what-is-grpc)
-2. [What is REST? (Current Implementation)](#2-what-is-rest-current-implementation)
+2. [What is REST?](#2-what-is-rest)
 3. [Key Differences: gRPC vs REST](#3-key-differences-grpc-vs-rest)
 4. [Architecture of This Project](#4-architecture-of-this-project)
-5. [How gRPC Works Under the Hood](#5-how-grpc-works-under-the-hood)
-6. [Protocol Buffers (Protobuf)](#6-protocol-buffers-protobuf)
-7. [File-by-File Walkthrough](#7-file-by-file-walkthrough)
-8. [How to Run](#8-how-to-run)
-9. [How to Use / Test Manually](#9-how-to-use--test-manually)
-10. [gRPC Communication Patterns](#10-grpc-communication-patterns)
-11. [When to Use gRPC vs REST](#11-when-to-use-grpc-vs-rest)
-12. [Benchmark Results](#12-benchmark-results)
+5. [gRPC-web: gRPC in the Browser](#5-grpc-web-grpc-in-the-browser)
+6. [How gRPC Works Under the Hood](#6-how-grpc-works-under-the-hood)
+7. [Protocol Buffers (Protobuf)](#7-protocol-buffers-protobuf)
+8. [File-by-File Walkthrough](#8-file-by-file-walkthrough)
+9. [How to Run](#9-how-to-run)
+10. [How to Use / Test Manually](#10-how-to-use--test-manually)
+11. [gRPC Communication Patterns](#11-grpc-communication-patterns)
+12. [When to Use gRPC vs REST](#12-when-to-use-grpc-vs-rest)
+13. [Benchmark Results](#13-benchmark-results)
 
 ---
 
@@ -32,21 +33,21 @@
 Instead of making HTTP requests with JSON payloads to URL endpoints (REST), you **call remote functions directly** as if they were local functions. The `.proto` file is the shared contract between client and server.
 
 ```
-// You write this:
-stub.CreateSatsangi(request)
+// You write this (gRPC):
+client.createSatsangi(request)
 
-// Instead of this:
+// Instead of this (REST):
 fetch('/api/satsangis', { method: 'POST', body: JSON.stringify(data) })
 ```
 
 ---
 
-## 2. What is REST? (Current Implementation)
+## 2. What is REST?
 
 The `jkpRegsitrationPOC/` folder uses a standard REST architecture:
 
 ```
-Browser (React)  ---HTTP/1.1 + JSON--->  FastAPI server (:8000)  --->  JSON file store
+Browser (React :5173)  --HTTP/1.1 + JSON-->  FastAPI (:8001)  --SQL-->  PostgreSQL (jkp_reg_poc_rest)
 ```
 
 - **Transport**: HTTP/1.1
@@ -60,31 +61,34 @@ Browser (React)  ---HTTP/1.1 + JSON--->  FastAPI server (:8000)  --->  JSON file
 
 | Layer     | Technology     |
 |-----------|---------------|
-| Frontend  | React + Vite + TypeScript |
+| Frontend  | React + Vite + TypeScript (:5173) |
 | Transport | HTTP/1.1 + JSON |
-| Backend   | FastAPI (Python) |
-| Storage   | `data/satsangis.json` |
+| Backend   | FastAPI (Python) (:8001) |
+| Storage   | PostgreSQL (`jkp_reg_poc_rest`) |
 
 ---
 
 ## 3. Key Differences: gRPC vs REST
 
-| Feature | REST (jkpRegsitrationPOC) | gRPC (jkpRegsitrationPOCgrpc) |
+| Feature | REST (jkpRegsitrationPOC) | gRPC (jkpRegistrationFULLGRPC) |
 |---------|--------------------------|-------------------------------|
-| **Protocol** | HTTP/1.1 | HTTP/2 |
+| **Protocol** | HTTP/1.1 | HTTP/2 (server) + gRPC-web (browser) |
 | **Data Format** | JSON (text, ~1KB per record) | Protobuf (binary, ~300B per record) |
 | **Schema** | Optional (OpenAPI) | Required (.proto file, compile-time) |
 | **Type Safety** | Runtime validation (Pydantic) | Compile-time (protoc generates typed code) |
 | **Streaming** | Not native (SSE/WebSocket needed) | Native (server, client, bidirectional) |
-| **Browser Support** | Native (fetch API) | Needs proxy (gRPC-web) |
+| **Browser Support** | Native (fetch API) | Via gRPC-web + proxy |
 | **Tooling** | curl, Postman, browser | grpcurl, grpcui, Postman (gRPC tab) |
 | **Connection** | New TCP connection per request | Persistent multiplexed connection |
 | **Latency** | Higher (JSON parse + new connection) | Lower (binary + persistent connection) |
-| **Payload Size** | Larger (~3-10x) | Smaller (binary encoding) |
+| **Payload Size** | Larger (~3-5x) | Smaller (binary encoding) |
 | **Human Readable** | Yes (JSON) | No (binary, need tools to inspect) |
 | **Code Generation** | Optional | Required (protoc compiler) |
 | **Error Handling** | HTTP status codes (200, 404, 500) | gRPC status codes (OK, NOT_FOUND, INTERNAL) |
 | **Caching** | Easy (HTTP caching, CDNs) | Hard (binary, no URL-based caching) |
+| **Database** | PostgreSQL (`jkp_reg_poc_rest`) | PostgreSQL (`jkp_reg_poc_grpc`) |
+| **Server Port** | 8001 | 50051 (gRPC) + 8080 (grpc-web proxy) |
+| **Client Port** | 5173 | 5174 |
 
 ### The Trade-off
 
@@ -97,98 +101,224 @@ gRPC  = Fast + Compact + Type-safe + Streaming + Better for microservices
 
 ## 4. Architecture of This Project
 
+This project implements the **same application** (satsangi registration) in two completely different architectures:
+
 ### REST Architecture (jkpRegsitrationPOC)
 
 ```
-┌─────────────┐     HTTP/1.1 + JSON     ┌─────────────────┐     File I/O     ┌──────────┐
-│   Browser    │ ──────────────────────► │  FastAPI :8000   │ ──────────────► │ JSON DB  │
-│  (React)     │ ◄────────────────────── │  (REST server)   │ ◄────────────── │          │
-└─────────────┘                          └─────────────────┘                  └──────────┘
+┌─────────────────┐    HTTP/1.1 + JSON     ┌─────────────────┐       SQL       ┌──────────────────┐
+│   React Client   │ ────────────────────► │  FastAPI :8001   │ ──────────────► │   PostgreSQL      │
+│   :5173          │ ◄──────────────────── │  (REST server)   │ ◄────────────── │   jkp_reg_poc_rest│
+└─────────────────┘                        └─────────────────┘                  └──────────────────┘
 ```
 
-### gRPC Architecture (jkpRegsitrationPOCgrpc)
+**Simple, direct, browser-native.**
+
+### gRPC Architecture (jkpRegistrationFULLGRPC) — Pure gRPC, No REST
 
 ```
-┌─────────────┐   HTTP/1.1+JSON   ┌──────────────────┐   gRPC/Protobuf   ┌─────────────────┐   File I/O   ┌──────────┐
-│   Browser    │ ───────────────► │  FastAPI Gateway   │ ────────────────► │  gRPC Server     │ ──────────► │ JSON DB  │
-│  (React)     │ ◄─────────────── │  :8000 (BFF)       │ ◄──────────────── │  :50051          │ ◄────────── │          │
-└─────────────┘                   └──────────────────┘                    └─────────────────┘              └──────────┘
-                                         │
-                                         │  This gateway translates
-                                         │  REST ↔ gRPC automatically
-                                         │
-                                  ┌──────────────────┐   gRPC/Protobuf   ┌─────────────────┐
-                                  │  Python client    │ ────────────────► │  gRPC Server     │
-                                  │  (benchmarks)     │ ◄──────────────── │  :50051          │
-                                  └──────────────────┘                    └─────────────────┘
-                                         │
-                                         │  Direct gRPC — no REST overhead
-                                         │  This is where the speed lives
+┌─────────────────┐   grpc-web/HTTP1.1   ┌──────────────────┐   gRPC/HTTP2   ┌─────────────────┐       SQL       ┌──────────────────┐
+│   React Client   │ ──────────────────► │  grpc-web Proxy   │ ─────────────► │  gRPC Server     │ ──────────────► │   PostgreSQL      │
+│   :5174          │ ◄────────────────── │  :8080             │ ◄───────────── │  :50051          │ ◄────────────── │   jkp_reg_poc_grpc│
+│   (grpc-web)     │                     │  (frame translate) │                │  (grpcio)        │                 │                   │
+└─────────────────┘                      └──────────────────┘                 └─────────────────┘                  └──────────────────┘
 ```
 
-**Key insight**: The FastAPI gateway exists ONLY so the browser can interact. For service-to-service or benchmark communication, you call gRPC directly — bypassing JSON serialization entirely.
+**No REST anywhere.** The browser speaks gRPC-web protocol (binary protobuf frames). The proxy translates the grpc-web wire format to native gRPC/HTTP2.
+
+### Benchmark Direct Path (no browser)
+
+```
+┌──────────────────┐   gRPC/HTTP2 (native)   ┌─────────────────┐       SQL       ┌──────────────────┐
+│  Python client    │ ─────────────────────► │  gRPC Server     │ ──────────────► │   PostgreSQL      │
+│  (benchmarks)     │ ◄───────────────────── │  :50051          │ ◄────────────── │   jkp_reg_poc_grpc│
+└──────────────────┘                         └─────────────────┘                  └──────────────────┘
+```
+
+**Key insight**: For service-to-service communication, gRPC is called directly without any web proxy overhead.
 
 ---
 
-## 5. How gRPC Works Under the Hood
+## 5. gRPC-web: gRPC in the Browser
 
-### Step-by-step: What happens when you call `stub.CreateSatsangi(request)`
+### The Problem
+
+Browsers cannot make native gRPC calls because:
+1. **No HTTP/2 framing control** — browsers don't expose low-level HTTP/2 APIs
+2. **No trailer support** — gRPC uses HTTP/2 trailers for status codes; browsers can't read them
+3. **No bidirectional streaming** — browser `fetch()` doesn't support it
+
+### The Solution: gRPC-web
+
+[gRPC-web](https://grpc.io/docs/platforms/web/basics/) is a JavaScript client library that implements a **subset of the gRPC protocol** adapted for browsers:
 
 ```
-1. CLIENT: Python creates a SatsangiCreate protobuf message object
-2. CLIENT: Protobuf serializes it to binary (~300 bytes vs ~1KB JSON)
-3. CLIENT: grpcio sends it over HTTP/2 to the server
-   - Uses existing persistent connection (no TCP handshake)
-   - HTTP/2 multiplexing: multiple requests on same connection
-   - Header compression via HPACK
-4. NETWORK: Binary payload travels over the wire
-5. SERVER: grpcio receives the HTTP/2 frame
-6. SERVER: Protobuf deserializes binary → SatsangiCreate message
-7. SERVER: Calls SatsangiServiceServicer.CreateSatsangi() method
-8. SERVER: Business logic runs (store.create_satsangi)
-9. SERVER: Result serialized to binary Satsangi protobuf message
-10. SERVER: Sent back over same HTTP/2 connection
-11. CLIENT: Receives and deserializes → usable Satsangi object
+Standard gRPC:     HTTP/2 + binary protobuf + trailers
+gRPC-web:          HTTP/1.1 + binary protobuf frames + trailers-in-body
+gRPC-web-text:     HTTP/1.1 + base64-encoded protobuf + trailers-in-body
+```
+
+### gRPC-web Wire Format
+
+Every gRPC-web message is wrapped in a **5-byte frame header**:
+
+```
+┌────────────────┬──────────────────────┬────────────────────┐
+│  Flag (1 byte) │  Length (4 bytes BE) │  Payload (N bytes) │
+└────────────────┴──────────────────────┴────────────────────┘
+
+Flag = 0x00: Data frame (protobuf payload)
+Flag = 0x80: Trailer frame (status codes as text)
+```
+
+#### Example: CreateSatsangi Request
+
+```
+Browser sends:
+  Content-Type: application/grpc-web-text
+  Body: base64(
+    0x00                          ← data frame flag
+    0x00 0x00 0x01 0x2B          ← payload length (299 bytes)
+    [protobuf binary payload]     ← SatsangiCreate message
+  )
+
+Proxy receives, base64-decodes, extracts payload, forwards to gRPC server via HTTP/2.
+
+Server responds with Satsangi protobuf message.
+
+Proxy wraps in grpc-web frame:
+  0x00 [length] [protobuf data]   ← data frame
+  0x80 [length] "grpc-status:0\r\ngrpc-message:OK\r\n"  ← trailer frame
+
+Browser decodes, deserializes protobuf → typed JavaScript object.
+```
+
+### Our Implementation
+
+Instead of using Envoy proxy (the "official" gRPC-web proxy), we built a **lightweight Python proxy** using FastAPI:
+
+```python
+# server/app/main.py — grpc-web proxy (NOT a REST server!)
+@app.post("/{service_path:path}")
+async def grpc_web_proxy(service_path, request):
+    body = await request.body()
+    if "grpc-web-text" in content_type:
+        body = base64.b64decode(body)
+    payload = decode_grpc_web_frame(body)
+    result = channel.unary_unary(f"/{service_path}")(payload)
+    return encode_grpc_web_response(result)
+```
+
+This proxy:
+- Accepts `application/grpc-web` or `application/grpc-web-text`
+- Decodes the grpc-web frame (strips 5-byte header)
+- Forwards raw protobuf bytes to the gRPC server via `grpc.insecure_channel`
+- Wraps the response in grpc-web frames with trailer metadata
+- Handles CORS headers for browser cross-origin requests
+
+### Client-Side gRPC-web
+
+The React client uses the [`grpc-web`](https://github.com/grpc/grpc-web) npm package:
+
+```typescript
+// client/src/api.ts
+import { SatsangiServiceClient } from './generated/SatsangiServiceClientPb'
+import { SatsangiCreate, SearchRequest, Empty } from './generated/satsangi_pb'
+
+const client = new SatsangiServiceClient('http://localhost:8080')
+
+// This sends a REAL gRPC call (protobuf binary) — NOT a REST call
+export async function createSatsangi(data) {
+  const req = new SatsangiCreate()
+  req.setFirstName(data.first_name)
+  req.setLastName(data.last_name)
+  // ...
+  return client.createSatsangi(req)  // ← gRPC call, not fetch()
+}
+```
+
+### gRPC-web vs REST Gateway: Key Differences
+
+| Aspect | REST Gateway (old) | gRPC-web (new) |
+|--------|-------------------|----------------|
+| Browser sends | JSON text | Protobuf binary |
+| Content-Type | `application/json` | `application/grpc-web-text` |
+| Schema enforcement | Runtime (JSON → Pydantic) | Compile-time (protobuf) |
+| Payload size | ~1KB per record | ~300B per record |
+| Type safety | None (JSON is untyped) | Full (generated classes) |
+| REST involved? | Yes (entire browser layer) | **No** — pure gRPC end-to-end |
+
+### References
+
+- [gRPC-web official docs](https://grpc.io/docs/platforms/web/basics/)
+- [grpc-web GitHub repo](https://github.com/grpc/grpc-web)
+- [gRPC-web protocol spec](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md)
+- [google-protobuf npm](https://www.npmjs.com/package/google-protobuf)
+
+---
+
+## 6. How gRPC Works Under the Hood
+
+### Step-by-step: What happens when the browser calls `client.createSatsangi(request)`
+
+```
+1. BROWSER: React creates a SatsangiCreate protobuf message object
+2. BROWSER: grpc-web serializes it to binary via google-protobuf
+3. BROWSER: Wraps in grpc-web frame (5-byte header + payload)
+4. BROWSER: Base64-encodes and sends POST to proxy :8080
+   - Content-Type: application/grpc-web-text
+   - URL: /jkp.registration.v1.SatsangiService/CreateSatsangi
+5. PROXY: Receives HTTP/1.1 request, base64-decodes, strips frame header
+6. PROXY: Forwards raw protobuf bytes to gRPC server via HTTP/2
+7. SERVER: grpcio receives the HTTP/2 frame
+8. SERVER: Protobuf deserializes binary → SatsangiCreate message
+9. SERVER: Calls SatsangiServiceServicer.CreateSatsangi() method
+10. SERVER: Business logic runs (store.create_satsangi → PostgreSQL)
+11. SERVER: Result serialized to binary Satsangi protobuf message
+12. SERVER: Sent back over HTTP/2 to proxy
+13. PROXY: Wraps in grpc-web frame (data frame + trailer frame)
+14. PROXY: Base64-encodes, returns to browser
+15. BROWSER: grpc-web decodes frame, deserializes protobuf
+16. BROWSER: Returns typed SatsangiMsg object to React component
 ```
 
 ### Why is this faster than REST?
 
-| Step | REST | gRPC |
+| Step | REST | gRPC (with grpc-web) |
 |------|------|------|
-| Connection | New TCP + TLS handshake (or keep-alive) | Persistent HTTP/2 connection |
-| Serialization | `json.dumps()` → text string | `msg.SerializeToString()` → binary bytes |
-| Payload size | ~1000 bytes | ~300 bytes |
-| Deserialization | `json.loads()` → dict → Pydantic validation | `msg.FromString()` → typed object |
-| Schema validation | Runtime (Pydantic parses JSON) | Compile-time (protoc already enforced types) |
+| Browser serialization | `JSON.stringify()` → text string | `msg.serializeBinary()` → binary bytes |
+| Payload size (request) | ~1000 bytes | ~300 bytes |
+| Server deserialization | `json.loads()` → dict → Pydantic | `msg.FromString()` → typed object |
+| Payload size (response) | ~1000 bytes | ~300 bytes |
+| Schema validation | Runtime (Pydantic parses JSON) | Compile-time (protoc enforced types) |
+| Connection (backend) | HTTP/1.1 | HTTP/2 persistent multiplexed |
 
 ---
 
-## 6. Protocol Buffers (Protobuf)
+## 7. Protocol Buffers (Protobuf)
 
 ### The .proto file
 
-Located at `server/proto/satsangi.proto`:
+Located at `jkpRegistrationFULLGRPC/server/proto/satsangi.proto`:
 
 ```protobuf
 syntax = "proto3";
 package jkp.registration.v1;
 
-// Messages define data structures (like TypeScript interfaces or Pydantic models)
 message SatsangiCreate {
   string first_name           = 1;   // Field number 1 — used in binary encoding
   string last_name            = 2;
   string phone_number         = 3;
   optional int32 age          = 4;   // "optional" means field can be absent
-  // ... more fields
+  // ... 31 fields total
 }
 
 message Satsangi {
   string satsangi_id  = 1;
   string created_at   = 2;
-  // ... all fields from SatsangiCreate plus ID and timestamp
+  // ... all fields from SatsangiCreate plus ID and timestamp (33 fields)
 }
 
-// Service defines the RPC methods (like REST endpoints)
 service SatsangiService {
   rpc CreateSatsangi(SatsangiCreate) returns (Satsangi);           // Unary
   rpc SearchSatsangis(SearchRequest) returns (SatsangiList);       // Unary
@@ -206,133 +336,143 @@ In Protobuf: `[field 1 = "Ravi"]` → only the field NUMBER is encoded (1 byte),
 ### Code generation
 
 ```bash
-# This command reads the .proto file and generates Python code
+# Python (server-side) — generates from .proto
 python -m grpc_tools.protoc \
   -I proto \
   --python_out=app/generated \
   --grpc_python_out=app/generated \
   proto/satsangi.proto
 
-# Generates:
-#   satsangi_pb2.py      — Message classes (SatsangiCreate, Satsangi, etc.)
-#   satsangi_pb2_grpc.py — Service stubs and servicer base classes
-#   satsangi_pb2.pyi     — Type stubs for IDE autocomplete
+# TypeScript (client-side) — hand-written using google-protobuf
+# See client/src/generated/satsangi_pb.ts
+# Uses jspb.BinaryWriter/BinaryReader for wire-format serialization
 ```
 
 ---
 
-## 7. File-by-File Walkthrough
+## 8. File-by-File Walkthrough
 
-### `jkpRegsitrationPOCgrpc/server/` structure
+### REST version: `jkpRegsitrationPOC/`
 
 ```
-server/
-├── proto/
-│   └── satsangi.proto              ← The contract (shared between client & server)
-├── app/
-│   ├── generated/
-│   │   ├── __init__.py
-│   │   ├── satsangi_pb2.py         ← Generated: protobuf message classes
-│   │   ├── satsangi_pb2.pyi        ← Generated: type stubs
-│   │   └── satsangi_pb2_grpc.py    ← Generated: gRPC service stubs
-│   ├── __init__.py
-│   ├── grpc_server.py              ← The gRPC server (port 50051)
-│   ├── main.py                     ← FastAPI gateway (port 8000, proxies to gRPC)
-│   ├── models.py                   ← Pydantic models (shared)
-│   └── store.py                    ← JSON file data store (shared)
-├── data/
-│   └── satsangis.json              ← Data file
-└── pyproject.toml                  ← Dependencies (grpcio, grpcio-tools, etc.)
+jkpRegsitrationPOC/
+├── server/
+│   ├── app/
+│   │   ├── db.py          ← PostgreSQL connection (jkp_reg_poc_rest)
+│   │   ├── main.py        ← FastAPI REST endpoints (:8001)
+│   │   ├── models.py      ← Pydantic models
+│   │   └── store.py       ← PostgreSQL CRUD operations
+│   └── pyproject.toml     ← fastapi, uvicorn, psycopg2-binary
+├── client/
+│   ├── src/
+│   │   ├── api.ts         ← fetch() calls to REST API
+│   │   ├── App.tsx        ← React routing
+│   │   └── pages/         ← CreatePage, SearchPage
+│   ├── vite.config.ts     ← Port 5173, proxy /api → :8001
+│   └── package.json       ← React, Vite, TailwindCSS
 ```
 
-### `grpc_server.py` — The core gRPC server
+### gRPC version: `jkpRegistrationFULLGRPC/`
 
-This file:
-1. Implements `SatsangiServiceServicer` — the class that handles incoming gRPC calls
-2. Converts between protobuf messages ↔ Pydantic models
-3. Uses the same `store.py` data layer as the REST version
-4. Enables server reflection (so tools like grpcurl can discover the API)
-5. Starts a thread pool executor (10 workers) for concurrent requests
+```
+jkpRegistrationFULLGRPC/
+├── server/
+│   ├── proto/
+│   │   └── satsangi.proto       ← The gRPC contract
+│   ├── app/
+│   │   ├── generated/
+│   │   │   ├── satsangi_pb2.py      ← Generated protobuf classes
+│   │   │   └── satsangi_pb2_grpc.py ← Generated gRPC stubs
+│   │   ├── db.py                ← PostgreSQL connection (jkp_reg_poc_grpc)
+│   │   ├── grpc_server.py      ← Pure gRPC server (:50051)
+│   │   ├── main.py             ← grpc-web proxy (:8080) — NOT REST!
+│   │   ├── models.py           ← Pydantic models
+│   │   └── store.py            ← PostgreSQL CRUD operations
+│   └── pyproject.toml          ← grpcio, psycopg2-binary (no fastapi for gRPC)
+├── client/
+│   ├── src/
+│   │   ├── generated/
+│   │   │   ├── satsangi_pb.ts           ← Protobuf message classes (TypeScript)
+│   │   │   └── SatsangiServiceClientPb.ts ← gRPC-web service client
+│   │   ├── api.ts              ← gRPC-web calls (no fetch!)
+│   │   ├── App.tsx             ← React routing
+│   │   └── pages/              ← CreatePage, SearchPage (identical UI)
+│   ├── vite.config.ts          ← Port 5174 (no proxy needed)
+│   └── package.json            ← grpc-web, google-protobuf
+```
 
-### `main.py` — The FastAPI gateway
+### Key files in the gRPC version
 
-This file:
-1. Starts the gRPC server in-process on startup (lifespan event)
-2. Exposes the same REST endpoints as the original (`POST /api/satsangis`, `GET /api/satsangis`)
-3. Internally creates a gRPC stub and forwards requests to the gRPC server
-4. Converts protobuf responses back to JSON for the browser
-
-This means **the browser doesn't need to know about gRPC at all** — it sees the same REST API. But internally, all communication goes through gRPC.
+| File | Purpose |
+|------|---------|
+| `grpc_server.py` | Pure gRPC server: implements `SatsangiServiceServicer`, handles protobuf ↔ Pydantic conversion, starts on :50051 |
+| `main.py` | grpc-web proxy: translates grpc-web wire format from browsers into native gRPC calls. **Not a REST server.** |
+| `satsangi_pb.ts` | Hand-written TypeScript protobuf classes using `google-protobuf` BinaryWriter/BinaryReader |
+| `SatsangiServiceClientPb.ts` | gRPC-web client using `grpc-web` MethodDescriptor pattern |
+| `api.ts` | Public API: converts TypeScript interfaces ↔ protobuf messages, calls gRPC-web client |
 
 ---
 
-## 8. How to Run
+## 9. How to Run
 
 ### Prerequisites
 
 - Python 3.12+ with `uv` package manager
 - Node.js / Bun for the frontend
+- PostgreSQL with databases `jkp_reg_poc_rest` and `jkp_reg_poc_grpc`
 
-### Server Setup
+### Create databases
 
 ```bash
-cd jkpRegsitrationPOCgrpc/server
-
-# Install Python dependencies
-uv sync
-
-# (Re)generate protobuf code (only needed if .proto changes)
-uv run python -m grpc_tools.protoc \
-  -I proto \
-  --python_out=app/generated \
-  --grpc_python_out=app/generated \
-  proto/satsangi.proto
-
-# Start the server (starts both gRPC:50051 and FastAPI:8000)
-uv run uvicorn app.main:app --reload --port 8000
-
-# OR start ONLY the gRPC server (for benchmarks)
-uv run python -m app.grpc_server
+PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE jkp_reg_poc_rest;"
+PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE jkp_reg_poc_grpc;"
 ```
 
-### Client Setup
+### REST version
 
 ```bash
-cd jkpRegsitrationPOCgrpc/client
+# Terminal 1: Server
+cd jkpRegsitrationPOC/server
+uv sync
+uv run python -m uvicorn app.main:app --port 8001
 
-# Install frontend dependencies
-bun install
+# Terminal 2: Client
+cd jkpRegsitrationPOC/client
+bun install && bun run dev
+# → http://localhost:5173
+```
 
-# Start dev server
-bun run dev
+### gRPC version
+
+```bash
+# Terminal 1: Server (starts gRPC :50051 + grpc-web proxy :8080)
+cd jkpRegistrationFULLGRPC/server
+uv sync
+uv run python -m uvicorn app.main:app --port 8080
+
+# Terminal 2: Client
+cd jkpRegistrationFULLGRPC/client
+bun install && bun run dev
+# → http://localhost:5174
 ```
 
 ### Standalone gRPC server (for benchmarking)
 
 ```bash
-cd jkpRegsitrationPOCgrpc/server
-
-# Start gRPC server only (no gateway)
+cd jkpRegistrationFULLGRPC/server
 uv run python -m app.grpc_server
-# Server starts on port 50051
+# Server starts on port 50051 (no web proxy)
 ```
 
 ---
 
-## 9. How to Use / Test Manually
+## 10. How to Use / Test Manually
 
 ### Using grpcurl (CLI tool for gRPC)
 
 ```bash
-# Install grpcurl
-# Linux: go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
-# Mac:   brew install grpcurl
-
 # List available services (reflection must be enabled)
 grpcurl -plaintext localhost:50051 list
-
-# Describe a service
-grpcurl -plaintext localhost:50051 describe jkp.registration.v1.SatsangiService
 
 # Create a satsangi
 grpcurl -plaintext -d '{
@@ -349,10 +489,6 @@ grpcurl -plaintext localhost:50051 jkp.registration.v1.SatsangiService/ListSatsa
 # Search satsangis
 grpcurl -plaintext -d '{"query": "Ravi"}' \
   localhost:50051 jkp.registration.v1.SatsangiService/SearchSatsangis
-
-# Stream search results
-grpcurl -plaintext -d '{"query": "Ravi"}' \
-  localhost:50051 jkp.registration.v1.SatsangiService/StreamSearchResults
 ```
 
 ### Using Python client directly
@@ -366,9 +502,7 @@ stub = satsangi_pb2_grpc.SatsangiServiceStub(channel)
 
 # Create
 result = stub.CreateSatsangi(satsangi_pb2.SatsangiCreate(
-    first_name="Ravi",
-    last_name="Sharma",
-    phone_number="9876543210",
+    first_name="Ravi", last_name="Sharma", phone_number="9876543210",
 ))
 print(f"Created: {result.satsangi_id}")
 
@@ -376,15 +510,23 @@ print(f"Created: {result.satsangi_id}")
 results = stub.SearchSatsangis(satsangi_pb2.SearchRequest(query="Ravi"))
 for s in results.satsangis:
     print(f"  {s.first_name} {s.last_name}")
+```
 
-# Server streaming
-for s in stub.StreamSearchResults(satsangi_pb2.SearchRequest(query="Ravi")):
-    print(f"  Streamed: {s.first_name}")
+### Using curl to test REST
+
+```bash
+# Create
+curl -X POST http://localhost:8001/api/satsangis \
+  -H "Content-Type: application/json" \
+  -d '{"first_name":"Ravi","last_name":"Sharma","phone_number":"9876543210"}'
+
+# Search
+curl http://localhost:8001/api/satsangis?q=Ravi
 ```
 
 ---
 
-## 10. gRPC Communication Patterns
+## 11. gRPC Communication Patterns
 
 gRPC supports 4 communication patterns. Our implementation uses 2 of them:
 
@@ -419,29 +561,16 @@ Client ◄─── Satsangi #3 ──────── Server
 Client ◄─── (stream end) ──────── Server
 ```
 
-**Advantage**: Client can start processing results BEFORE the server finishes. Great for large result sets.
+**Advantage**: Client can start processing results BEFORE the server finishes.
 
 ### 3. Client Streaming (not used here)
-
-```
-Client ──── Message #1 ─────► Server
-Client ──── Message #2 ─────► Server
-Client ──── (end) ──────────► Server
-Client ◄─── Response ──────── Server
-```
-
 ### 4. Bidirectional Streaming (not used here)
 
-```
-Client ──── Message ────► Server
-Client ◄─── Message ◄─── Server
-Client ──── Message ────► Server
-Client ◄─── Message ◄─── Server
-```
+> **Note**: gRPC-web currently only supports Unary and Server Streaming. Client streaming and bidirectional streaming require native gRPC (not available in browsers).
 
 ---
 
-## 11. When to Use gRPC vs REST
+## 12. When to Use gRPC vs REST
 
 ### Use REST when:
 
@@ -457,43 +586,48 @@ Client ◄─── Message ◄─── Server
 - **Low latency required** — binary serialization + HTTP/2 multiplexing
 - **Streaming needed** — real-time data feeds, live updates, large datasets
 - **Polyglot systems** — services in Python, Go, Java, etc. share .proto files
-- **Strong contracts** — .proto file enforces types at compile time across all languages
+- **Strong contracts** — .proto file enforces types at compile time
 - **High throughput** — thousands of requests/sec between services
 
-### Hybrid approach (what this project does):
+### Use gRPC-web when:
 
-```
-Browser  ──REST──►  Gateway  ──gRPC──►  Backend Services
-```
-
-This is the **industry standard**: REST for external clients, gRPC for internal communication.
+- You want **end-to-end gRPC** including the browser
+- You need **protobuf type safety** all the way to the UI
+- You want to **eliminate the REST layer** entirely
+- You're building a **microservices frontend** (micro-frontends)
 
 ---
 
-## 12. Benchmark Results
+## 13. Benchmark Results
 
 Run the benchmarks yourself:
 
 ```bash
-cd jkpRegsitrationPOCgrpc/server
+# Start both servers first:
+# Terminal 1: REST
+cd jkpRegsitrationPOC/server && uv run python -m uvicorn app.main:app --port 8001
+# Terminal 2: gRPC
+cd jkpRegistrationFULLGRPC/server && uv run python -m app.grpc_server
 
-# Make sure both REST and gRPC servers are running first
-# Then run the benchmark suite from the project root:
-uv run python ../../benchmarks/run_all_benchmarks.py
+# Terminal 3: Run benchmarks
+cd benchmarks
+uv run python bench_standalone.py
 ```
 
-### What the benchmarks test:
+### What the benchmarks test (10 categories):
 
-| Test | What it measures |
-|------|-----------------|
-| **Latency** | Round-trip time for a single request (p50, p95, p99) |
-| **Throughput** | Requests per second under load |
-| **Payload Size** | Bytes on the wire for identical data |
-| **Serialization** | Time to encode/decode 10,000 messages |
-| **Concurrent Load** | Performance under 10/50/100 concurrent clients |
-| **Streaming vs Batch** | gRPC streaming vs REST batch fetch for large datasets |
-| **Connection Overhead** | Cost of creating new connections |
-| **Memory Usage** | RAM consumed by server under load |
+| # | Test | What it measures |
+|---|------|-----------------|
+| 1 | **Latency** | Round-trip time (create + search, p50/p95/p99) |
+| 2 | **Throughput** | Sustained requests/sec (read + write) |
+| 3 | **Payload Size** | Wire bytes for 1, 10, 100, 1000 records |
+| 4 | **Serialization** | Encode/decode speed for 10,000 messages |
+| 5 | **Concurrent Load** | 5/10/25/50/100 simultaneous clients |
+| 6 | **Streaming** | gRPC server-streaming vs REST batch |
+| 7 | **Connection Overhead** | New vs reused connection cost |
+| 8 | **Memory** | Client-side RAM consumption |
+| 9 | **Slow Network** | Added 10/50/100/200ms latency simulation |
+| 10 | **Mixed Workload** | 70% read / 30% write realistic pattern |
 
 ### Expected results (typical):
 
@@ -506,7 +640,7 @@ uv run python ../../benchmarks/run_all_benchmarks.py
 | 100 concurrent clients | Degrades | Stable | gRPC |
 | Connection setup | ~1-3ms each | ~0.1ms (reused) | gRPC |
 | Human readability | Excellent | Poor | REST |
-| Browser support | Native | Needs proxy | REST |
+| Browser support | Native | Via proxy | REST |
 
 ---
 
@@ -526,19 +660,34 @@ uv run python ../../benchmarks/run_all_benchmarks.py
 
 ## Appendix: Dependencies
 
-### Python (server/pyproject.toml)
+### REST Server (jkpRegsitrationPOC/server/pyproject.toml)
+
+| Package | Purpose |
+|---------|---------|
+| `fastapi` | REST API framework |
+| `uvicorn` | ASGI server |
+| `pydantic` | Data validation models |
+| `psycopg2-binary` | PostgreSQL driver |
+
+### gRPC Server (jkpRegistrationFULLGRPC/server/pyproject.toml)
 
 | Package | Purpose |
 |---------|---------|
 | `grpcio` | Core gRPC runtime for Python |
 | `grpcio-tools` | Protobuf compiler + Python code generator |
-| `grpcio-reflection` | Enables service discovery (grpcurl, Postman) |
+| `grpcio-reflection` | Service discovery (grpcurl, Postman) |
 | `protobuf` | Protobuf message runtime library |
-| `fastapi` | REST gateway for browser clients |
-| `uvicorn` | ASGI server for FastAPI |
-| `pydantic` | Data validation models |
+| `psycopg2-binary` | PostgreSQL driver |
+| `fastapi` + `uvicorn` | grpc-web proxy only (NOT for REST) |
 
-### Frontend (client/package.json)
+### gRPC Client (jkpRegistrationFULLGRPC/client/package.json)
 
-The frontend remains unchanged — it talks to the FastAPI gateway via REST.
-The gateway internally translates REST → gRPC → REST.
+| Package | Purpose |
+|---------|---------|
+| `grpc-web` | gRPC-web client library for browsers |
+| `google-protobuf` | Protobuf runtime (BinaryWriter/BinaryReader) |
+| `@types/google-protobuf` | TypeScript type definitions |
+
+### REST Client (jkpRegsitrationPOC/client/package.json)
+
+Standard React + Vite + TypeScript. Uses native `fetch()` — no gRPC dependencies.

@@ -1,61 +1,105 @@
-import json
-from pathlib import Path
+"""PostgreSQL-backed storage for satsangi records (REST version)."""
+
+import psycopg2.extras
+from app.db import get_connection
 from app.models import Satsangi, SatsangiCreate
 
-DATA_FILE = Path(__file__).parent.parent / "data" / "satsangis.json"
+# All columns in insertion order (excluding created_at which is auto-generated)
+_INSERT_FIELDS = [
+    "satsangi_id", "first_name", "last_name", "phone_number", "age",
+    "date_of_birth", "pan", "gender", "special_category", "nationality",
+    "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
+    "nick_name", "print_on_card", "introducer", "country", "address", "city",
+    "district", "state", "pincode", "emergency_contact", "ex_center_satsangi_id",
+    "introduced_by", "has_room_in_ashram", "email", "banned", "first_timer",
+    "date_of_first_visit", "notes",
+]
+
+_ALL_FIELDS = [
+    "satsangi_id", "created_at", "first_name", "last_name", "phone_number",
+    "age", "date_of_birth", "pan", "gender", "special_category", "nationality",
+    "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
+    "nick_name", "print_on_card", "introducer", "country", "address", "city",
+    "district", "state", "pincode", "emergency_contact", "ex_center_satsangi_id",
+    "introduced_by", "has_room_in_ashram", "email", "banned", "first_timer",
+    "date_of_first_visit", "notes",
+]
 
 
-def _ensure_file() -> None:
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not DATA_FILE.exists():
-        DATA_FILE.write_text("[]")
-
-
-def _read_all() -> list[Satsangi]:
-    _ensure_file()
-    raw = json.loads(DATA_FILE.read_text())
-    return [Satsangi(**item) for item in raw]
-
-
-def _write_all(items: list[Satsangi]) -> None:
-    _ensure_file()
-    DATA_FILE.write_text(json.dumps([item.model_dump() for item in items], indent=2))
+def _row_to_satsangi(row: dict) -> Satsangi:
+    """Convert a database row dict to a Satsangi model."""
+    data = dict(row)
+    # Convert timestamp to ISO string
+    if data.get("created_at"):
+        data["created_at"] = data["created_at"].isoformat()
+    return Satsangi(**data)
 
 
 def create_satsangi(data: SatsangiCreate) -> Satsangi:
-    items = _read_all()
+    """Insert a new satsangi into the database and return it."""
     satsangi = Satsangi(**data.model_dump())
-    items.append(satsangi)
-    _write_all(items)
-    return satsangi
+    placeholders = ", ".join(["%s"] * len(_INSERT_FIELDS))
+    columns = ", ".join(_INSERT_FIELDS)
+    values = [getattr(satsangi, f) for f in _INSERT_FIELDS]
 
-
-def _match(value: str | None, q: str) -> bool:
-    return bool(value and q in value.lower())
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"INSERT INTO satsangis ({columns}) VALUES ({placeholders}) "
+                f"RETURNING {', '.join(_ALL_FIELDS)}",
+                values,
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return _row_to_satsangi(row)
+    finally:
+        conn.close()
 
 
 def search_satsangis(query: str) -> list[Satsangi]:
-    items = _read_all()
+    """Search satsangis using ILIKE across multiple fields."""
     if not query.strip():
-        return items
-    q = query.lower().strip()
-    return [
-        s
-        for s in items
-        if q in s.first_name.lower()
-        or q in s.last_name.lower()
-        or q in f"{s.first_name} {s.last_name}".lower()
-        or q in s.phone_number.lower()
-        or q in s.satsangi_id.lower()
-        or _match(s.email, q)
-        or _match(s.pan, q)
-        or _match(s.govt_id_number, q)
-        or _match(s.nick_name, q)
-        or _match(s.ex_center_satsangi_id, q)
-        or _match(s.city, q)
-        or _match(s.pincode, q)
-    ]
+        return get_all_satsangis()
+
+    pattern = f"%{query.strip()}%"
+    sql = f"""
+        SELECT {', '.join(_ALL_FIELDS)} FROM satsangis
+        WHERE LOWER(first_name) LIKE LOWER(%s)
+           OR LOWER(last_name) LIKE LOWER(%s)
+           OR LOWER(first_name || ' ' || last_name) LIKE LOWER(%s)
+           OR phone_number LIKE %s
+           OR LOWER(satsangi_id) LIKE LOWER(%s)
+           OR LOWER(COALESCE(email, '')) LIKE LOWER(%s)
+           OR LOWER(COALESCE(pan, '')) LIKE LOWER(%s)
+           OR LOWER(COALESCE(govt_id_number, '')) LIKE LOWER(%s)
+           OR LOWER(COALESCE(nick_name, '')) LIKE LOWER(%s)
+           OR LOWER(COALESCE(ex_center_satsangi_id, '')) LIKE LOWER(%s)
+           OR LOWER(COALESCE(city, '')) LIKE LOWER(%s)
+           OR COALESCE(pincode, '') LIKE %s
+        ORDER BY created_at DESC
+    """
+    params = [pattern] * 12
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+        return [_row_to_satsangi(row) for row in rows]
+    finally:
+        conn.close()
 
 
 def get_all_satsangis() -> list[Satsangi]:
-    return _read_all()
+    """Return all satsangis, newest first."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"SELECT {', '.join(_ALL_FIELDS)} FROM satsangis ORDER BY created_at DESC"
+            )
+            rows = cur.fetchall()
+        return [_row_to_satsangi(row) for row in rows]
+    finally:
+        conn.close()

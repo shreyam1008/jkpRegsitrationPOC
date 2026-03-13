@@ -1,26 +1,34 @@
-"""FastAPI gateway that proxies REST requests to the gRPC backend.
+"""grpc-web proxy: translates the grpc-web wire format from browsers into
+native gRPC calls to the backend server on :50051.
 
-Architecture:
-  Browser  --HTTP/JSON-->  FastAPI gateway (:8000)  --gRPC/Protobuf-->  gRPC server (:50051)  --SQL-->  PostgreSQL (:5432)
+Architecture (NO REST anywhere):
+  Browser (React + grpc-web)  --grpc-web/HTTP1.1-->  Proxy (:8080)  --gRPC/HTTP2-->  gRPC Server (:50051)  --SQL-->  PostgreSQL
 
-This is the standard BFF (Backend-For-Frontend) pattern used in production
-gRPC deployments.  The gateway translates REST↔gRPC so browsers can interact
-with the system while all backend communication uses gRPC.
+The grpc-web protocol is a subset of gRPC designed for browsers:
+- Content-Type: application/grpc-web-text (base64) or application/grpc-web (binary)
+- 5-byte frame header: [compressed(1 byte)] [length(4 bytes big-endian)] [payload]
+- Trailers sent as a final frame with compressed flag = 0x80
+
+This proxy handles all of that so the browser talks gRPC end-to-end.
 """
 
+import base64
 import contextlib
+import logging
+import struct
 
 import grpc
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 
-from app.generated import satsangi_pb2, satsangi_pb2_grpc
 from app.grpc_server import serve as start_grpc_server
-from app.models import Satsangi, SatsangiCreate
+
+logger = logging.getLogger(__name__)
 
 GRPC_TARGET = "localhost:50051"
 
 # ---------------------------------------------------------------------------
-# Lifecycle: start gRPC server in-process alongside FastAPI
+# Lifecycle: start gRPC server in-process alongside the proxy
 # ---------------------------------------------------------------------------
 
 _grpc_server = None
@@ -30,85 +38,124 @@ _grpc_server = None
 async def lifespan(app: FastAPI):
     global _grpc_server
     _grpc_server = start_grpc_server(port=50051)
+    logger.info("gRPC server started on :50051, grpc-web proxy on :8080")
     yield
     if _grpc_server:
         _grpc_server.stop(grace=2)
 
 
-app = FastAPI(title="JKP Registration POC (Full gRPC + PostgreSQL)", lifespan=lifespan)
+app = FastAPI(title="JKP Registration POC — grpc-web Proxy", lifespan=lifespan)
 
 
-def _get_stub():
+# ---------------------------------------------------------------------------
+# CORS — required for grpc-web from browsers
+# ---------------------------------------------------------------------------
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=[
+        "grpc-status", "grpc-message", "grpc-encoding",
+        "grpc-accept-encoding", "x-grpc-web",
+    ],
+)
+
+
+# ---------------------------------------------------------------------------
+# grpc-web frame helpers
+# ---------------------------------------------------------------------------
+
+def _decode_grpc_web_frame(raw: bytes) -> bytes:
+    """Extract the protobuf payload from a grpc-web frame (5-byte header + data)."""
+    if len(raw) < 5:
+        raise ValueError("grpc-web frame too short")
+    _compressed = raw[0]
+    length = struct.unpack(">I", raw[1:5])[0]
+    return raw[5 : 5 + length]
+
+
+def _encode_grpc_web_frame(payload: bytes, is_trailer: bool = False) -> bytes:
+    """Wrap a protobuf payload in a grpc-web frame."""
+    flag = 0x80 if is_trailer else 0x00
+    header = struct.pack(">BI", flag, len(payload))
+    return header + payload
+
+
+# ---------------------------------------------------------------------------
+# Single catch-all POST route that handles ALL grpc-web calls
+# ---------------------------------------------------------------------------
+
+@app.post("/{service_path:path}")
+async def grpc_web_proxy(service_path: str, request: Request):
+    """Proxy a grpc-web request to the native gRPC server.
+
+    The service_path matches patterns like:
+      jkp.registration.v1.SatsangiService/CreateSatsangi
+      jkp.registration.v1.SatsangiService/SearchSatsangis
+      jkp.registration.v1.SatsangiService/ListSatsangis
+    """
+    content_type = request.headers.get("content-type", "")
+    is_text = "grpc-web-text" in content_type
+
+    # Read the raw body
+    body = await request.body()
+
+    # If grpc-web-text, base64-decode it
+    if is_text:
+        body = base64.b64decode(body)
+
+    # Extract the protobuf payload from the grpc-web frame
+    try:
+        proto_payload = _decode_grpc_web_frame(body)
+    except Exception:
+        return Response(
+            content=b"",
+            status_code=400,
+            headers={"grpc-status": "3", "grpc-message": "Invalid grpc-web frame"},
+        )
+
+    # Build the full gRPC method path
+    method = f"/{service_path}"
+
+    # Forward to the native gRPC server
     channel = grpc.insecure_channel(GRPC_TARGET)
-    return satsangi_pb2_grpc.SatsangiServiceStub(channel)
+    try:
+        response_future = channel.unary_unary(
+            method,
+            request_serializer=lambda x: x,    # already serialized
+            response_deserializer=lambda x: x,  # return raw bytes
+        )(proto_payload, timeout=30)
+    except grpc.RpcError as e:
+        status_code = str(e.code().value[0]) if hasattr(e, "code") else "13"
+        message = e.details() if hasattr(e, "details") else str(e)
+        trailers = f"grpc-status:{status_code}\r\ngrpc-message:{message}\r\n"
+        trailer_frame = _encode_grpc_web_frame(trailers.encode(), is_trailer=True)
+        data_frame = b""
+        result = data_frame + trailer_frame
+        if is_text:
+            result = base64.b64encode(result)
+        return Response(
+            content=result,
+            media_type="application/grpc-web-text" if is_text else "application/grpc-web",
+            headers={"grpc-status": status_code, "grpc-message": message},
+        )
 
+    # Build the grpc-web response: data frame + trailer frame
+    data_frame = _encode_grpc_web_frame(response_future)
+    trailers = "grpc-status:0\r\ngrpc-message:OK\r\n"
+    trailer_frame = _encode_grpc_web_frame(trailers.encode(), is_trailer=True)
+    result = data_frame + trailer_frame
 
-def _proto_to_dict(pb) -> dict:
-    """Convert a protobuf Satsangi message to a plain dict."""
-    d: dict = {}
-    for field in [
-        "satsangi_id", "created_at", "first_name", "last_name", "phone_number",
-        "nationality", "print_on_card", "country", "has_room_in_ashram",
-        "banned", "first_timer",
-    ]:
-        d[field] = getattr(pb, field)
-    for field in [
-        "age", "date_of_birth", "pan", "gender", "special_category",
-        "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
-        "nick_name", "introducer", "address", "city", "district", "state",
-        "pincode", "emergency_contact", "ex_center_satsangi_id", "introduced_by",
-        "email", "date_of_first_visit", "notes",
-    ]:
-        if pb.HasField(field):
-            d[field] = getattr(pb, field)
-        else:
-            d[field] = None
-    return d
+    if is_text:
+        result = base64.b64encode(result)
 
-
-def _create_to_proto(data: SatsangiCreate) -> satsangi_pb2.SatsangiCreate:
-    kwargs: dict = {
-        "first_name": data.first_name,
-        "last_name": data.last_name,
-        "phone_number": data.phone_number,
-        "nationality": data.nationality,
-        "print_on_card": data.print_on_card,
-        "country": data.country,
-        "has_room_in_ashram": data.has_room_in_ashram,
-        "banned": data.banned,
-        "first_timer": data.first_timer,
-    }
-    for field in [
-        "age", "date_of_birth", "pan", "gender", "special_category",
-        "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
-        "nick_name", "introducer", "address", "city", "district", "state",
-        "pincode", "emergency_contact", "ex_center_satsangi_id", "introduced_by",
-        "email", "date_of_first_visit", "notes",
-    ]:
-        val = getattr(data, field)
-        if val is not None:
-            kwargs[field] = val
-    return satsangi_pb2.SatsangiCreate(**kwargs)
-
-
-# ---------------------------------------------------------------------------
-# REST endpoints (proxied to gRPC)
-# ---------------------------------------------------------------------------
-
-
-@app.post("/api/satsangis", response_model=Satsangi)
-async def create_satsangi(data: SatsangiCreate):
-    stub = _get_stub()
-    proto_req = _create_to_proto(data)
-    result = stub.CreateSatsangi(proto_req)
-    return _proto_to_dict(result)
-
-
-@app.get("/api/satsangis", response_model=list[Satsangi])
-async def list_satsangis(q: str = ""):
-    stub = _get_stub()
-    if q:
-        result = stub.SearchSatsangis(satsangi_pb2.SearchRequest(query=q))
-    else:
-        result = stub.ListSatsangis(satsangi_pb2.Empty())
-    return [_proto_to_dict(s) for s in result.satsangis]
+    resp_content_type = "application/grpc-web-text" if is_text else "application/grpc-web"
+    return Response(
+        content=result,
+        media_type=resp_content_type,
+        headers={"grpc-status": "0", "grpc-message": "OK"},
+    )

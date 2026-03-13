@@ -1,4 +1,4 @@
-"""PostgreSQL connection and schema management."""
+"""PostgreSQL connection and schema management for REST version."""
 
 import logging
 import psycopg2
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 DB_CONFIG = {
     "host": "localhost",
     "port": 5432,
-    "dbname": "jkp_reg_poc_grpc",
+    "dbname": "jkp_reg_poc_rest",
     "user": "postgres",
     "password": "postgres",
 }
@@ -72,6 +72,6 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute(CREATE_TABLE_SQL)
         conn.commit()
-        logger.info("Database schema initialized successfully")
+        logger.info("Database schema initialized successfully (jkp_reg_poc_rest)")
     finally:
         conn.close()

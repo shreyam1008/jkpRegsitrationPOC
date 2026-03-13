@@ -57,7 +57,7 @@ export default function Sidebar() {
           </div>
           <div>
             <div className="text-sm font-bold text-gray-900 leading-tight">JKP Registration</div>
-            <div className="text-[11px] text-gray-400">REST</div>
+            <div className="text-[11px] text-gray-400">REST + PostgreSQL</div>
           </div>
         </div>
 
