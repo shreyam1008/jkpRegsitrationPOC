@@ -2,21 +2,15 @@
 
 ## Why gRPC in This Project?
 
-This project demonstrates **gRPC vs REST** for the same business application (satsangi registration). The gRPC version shows how modern microservices communicate efficiently.
+The REST and gRPC implementations of the satsangi registration app exist side-by-side to highlight how the same business workflow behaves over different transports.
 
-## The Core Problem gRPC Solves
-
-**REST (HTTP/1.1 + JSON)**:
-- Text-based payloads (~3-5x larger)
-- One request per TCP connection
-- No streaming support
-- Runtime type validation
-
-**gRPC (HTTP/2 + Protocol Buffers)**:
-- Binary payloads (compact, fast)
-- Multiplexed connections
-- Native streaming
-- Compile-time type safety
+| Layer | REST (HTTP/1.1 + JSON) | gRPC (HTTP/2 + Protobuf) |
+|-------|------------------------|--------------------------|
+| Payloads | Text, 3–5× larger | Binary, compact |
+| Connections | One request per TCP connection | Multiplexed streams |
+| Streaming | Requires SSE/WebSocket | Native (unary + streaming) |
+| Type safety | Runtime validation | Compile-time contracts |
+| Debuggability | Human-readable JSON | Binary (but AI tooling now decodes instantly) |
 
 ## Architecture Overview
 
@@ -92,7 +86,7 @@ service SatsangiService {
 
 ### Generated Code (What you use)
 
-#### Server-Side (Python) - Auto-generated
+#### Server-side (Python) — auto-generated
 ```bash
 # Generated at build time
 python -m grpc_tools.protoc \
@@ -112,7 +106,7 @@ request.last_name = "Sharma"
 binary = request.SerializeToString()
 ```
 
-#### Client-Side (TypeScript) - Manual Implementation
+#### Client-side (TypeScript) — currently hand-written (TODO: automate)
 ```typescript
 // Hand-written classes using google-protobuf
 export class SatsangiCreate extends jspb.Message {
@@ -126,6 +120,14 @@ const req = new SatsangiCreate()
 req.setFirstName("Ravi")
 req.setLastName("Sharma")
 ```
+
+> **TODO**: wire up a protobuf TS generator (e.g., `protoc-gen-ts`, `ts-proto`, or `buf`) so browser classes stay auto-synced with `satsangi.proto` just like the server.
+
+### Why Protobuf is Faster
+
+1. **Field numbers instead of strings** — each field is encoded as `[tag (field number + wire type)][length][value]`, so the wire format sends small integers instead of repeating JSON keys like `"first_name"`.
+2. **Binary serialization** — integers use varints, booleans are single bits, and absent optional fields take zero bytes, so only the data that exists crosses the wire.
+3. **Server/client codegen** — both sides read/write the binary representation directly; there is no intermediate stringification or parsing step, which keeps CPU time low.
 
 ## Performance Benefits
 
@@ -153,19 +155,9 @@ req.setLastName("Sharma")
 
 ## When to Use gRPC vs REST
 
-### Use REST when:
-- Public-facing APIs
-- Simple CRUD operations
-- **Traditional debugging needed** (without AI assistance)
-- Team unfamiliar with gRPC
+**Choose REST when** you need public browser APIs, extremely simple CRUD, or your team is not ready for the protobuf/tooling workflow.
 
-### Use gRPC when:
-- Microservice-to-microservice communication
-- High throughput requirements
-- Real-time streaming needed
-- Strong type safety required
-- Polyglot systems (different languages)
-- **AI-assisted development available** (eliminates debugging complexity)
+**Choose gRPC when** you need high throughput, microservice-to-microservice communication, streaming, strong contracts, or cross-language interoperability—and especially when you can lean on AI/devtool support to decode payloads during debugging.
 
 ## AI-Assisted Debugging: The Game Changer
 
@@ -204,14 +196,6 @@ AI: "Based on your satsangi.proto schema:
      - Missing required field 17 (country) ❌"
 ```
 
-**3. Performance Insights**
-```
-User: "Is this binary efficient?"
-AI: "28 bytes vs 79 bytes JSON = 2.82x smaller.
-     For 10K requests: 280KB vs 790KB bandwidth saved.
-     Network latency saved: ~2ms on 3G, ~0.5ms on WiFi"
-```
-
 ### Binary Structure: What AI Sees
 
 **Protobuf Binary:**
@@ -244,7 +228,6 @@ Field 4 (age, int32): 25                 ← 0x20 = Field 4, wire type 0
 - AI provides context-aware error messages  
 - AI translates binary to human-readable instantly
 - AI suggests specific fixes based on your code structure
-- AI gives performance insights automatically
 
 **Result**: The performance benefits of gRPC (2.4x smaller payloads, 10x faster serialization) with debugging that's actually BETTER than REST.
 
