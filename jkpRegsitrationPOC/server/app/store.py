@@ -1,70 +1,89 @@
-"""PostgreSQL-backed storage for satsangi records (REST version)."""
+"""PostgreSQL-backed storage for devotee + visit records."""
 
 import psycopg2.extras
 from app.db import get_connection
-from app.models import Satsangi, SatsangiCreate
+from app.models import Devotee, DevoteeCreate, Visit, VisitCreate
 
-# All columns in insertion order (excluding created_at which is auto-generated)
-_INSERT_FIELDS = [
-    "satsangi_id", "first_name", "last_name", "phone_number", "age",
-    "date_of_birth", "pan", "gender", "special_category", "nationality",
+# ─── Column lists ───
+
+_DEVOTEE_INSERT = [
+    "satsangi_id", "first_name", "last_name", "phone_number", "email",
+    "gender", "date_of_birth", "age", "nationality", "special_category",
+    "nick_name", "pan",
     "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
-    "nick_name", "print_on_card", "introducer", "country", "address", "city",
-    "district", "state", "pincode", "emergency_contact", "ex_center_satsangi_id",
-    "introduced_by", "has_room_in_ashram", "email", "banned", "first_timer",
+    "country", "address", "city", "district", "state", "pincode",
+    "emergency_contact", "introducer", "introduced_by", "ex_center_satsangi_id",
+    "print_on_card", "has_room_in_ashram", "banned", "first_timer",
     "date_of_first_visit", "notes",
 ]
 
-_ALL_FIELDS = [
-    "satsangi_id", "created_at", "first_name", "last_name", "phone_number",
-    "age", "date_of_birth", "pan", "gender", "special_category", "nationality",
-    "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
-    "nick_name", "print_on_card", "introducer", "country", "address", "city",
-    "district", "state", "pincode", "emergency_contact", "ex_center_satsangi_id",
-    "introduced_by", "has_room_in_ashram", "email", "banned", "first_timer",
-    "date_of_first_visit", "notes",
+_DEVOTEE_ALL = ["id", "satsangi_id", "created_at", "updated_at"] + [
+    c for c in _DEVOTEE_INSERT if c != "satsangi_id"
 ]
 
-
-def _row_to_satsangi(row: dict) -> Satsangi:
-    """Convert a database row dict to a Satsangi model."""
-    data = dict(row)
-    # Convert timestamp to ISO string
-    if data.get("created_at"):
-        data["created_at"] = data["created_at"].isoformat()
-    return Satsangi(**data)
+_VISIT_INSERT = [
+    "devotee_id", "location", "arrival_date", "departure_date", "purpose", "notes",
+]
+_VISIT_ALL = ["id"] + _VISIT_INSERT + ["created_at"]
 
 
-def create_satsangi(data: SatsangiCreate) -> Satsangi:
-    """Insert a new satsangi into the database and return it."""
-    satsangi = Satsangi(**data.model_dump())
-    placeholders = ", ".join(["%s"] * len(_INSERT_FIELDS))
-    columns = ", ".join(_INSERT_FIELDS)
-    values = [getattr(satsangi, f) for f in _INSERT_FIELDS]
+def _ts(row: dict) -> dict:
+    """Convert timestamp fields to ISO strings."""
+    d = dict(row)
+    for key in ("created_at", "updated_at"):
+        if d.get(key):
+            d[key] = d[key].isoformat()
+    # Convert date fields to string
+    for key in ("date_of_birth", "id_expiry_date", "date_of_first_visit",
+                "arrival_date", "departure_date"):
+        if d.get(key):
+            d[key] = str(d[key])
+    return d
 
+
+# ─── Devotees ───
+
+def create_devotee(data: DevoteeCreate) -> Devotee:
+    from uuid import uuid4
+    dump = data.model_dump()
+    dump["satsangi_id"] = uuid4().hex[:8].upper()
+    cols = ", ".join(_DEVOTEE_INSERT)
+    phs = ", ".join(["%s"] * len(_DEVOTEE_INSERT))
+    vals = [dump.get(f) for f in _DEVOTEE_INSERT]
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                f"INSERT INTO satsangis ({columns}) VALUES ({placeholders}) "
-                f"RETURNING {', '.join(_ALL_FIELDS)}",
-                values,
+                f"INSERT INTO devotees ({cols}) VALUES ({phs}) RETURNING {', '.join(_DEVOTEE_ALL)}",
+                vals,
             )
             row = cur.fetchone()
         conn.commit()
-        return _row_to_satsangi(row)
+        return Devotee(**_ts(row))
     finally:
         conn.close()
 
 
-def search_satsangis(query: str) -> list[Satsangi]:
-    """Search satsangis using ILIKE across multiple fields."""
-    if not query.strip():
-        return get_all_satsangis()
+def get_devotee_by_satsangi_id(satsangi_id: str) -> Devotee | None:
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"SELECT {', '.join(_DEVOTEE_ALL)} FROM devotees WHERE satsangi_id = %s",
+                (satsangi_id,),
+            )
+            row = cur.fetchone()
+        return Devotee(**_ts(row)) if row else None
+    finally:
+        conn.close()
 
+
+def search_devotees(query: str) -> list[Devotee]:
+    if not query.strip():
+        return get_all_devotees()
     pattern = f"%{query.strip()}%"
     sql = f"""
-        SELECT {', '.join(_ALL_FIELDS)} FROM satsangis
+        SELECT {', '.join(_DEVOTEE_ALL)} FROM devotees
         WHERE LOWER(first_name) LIKE LOWER(%s)
            OR LOWER(last_name) LIKE LOWER(%s)
            OR LOWER(first_name || ' ' || last_name) LIKE LOWER(%s)
@@ -79,27 +98,59 @@ def search_satsangis(query: str) -> list[Satsangi]:
            OR COALESCE(pincode, '') LIKE %s
         ORDER BY created_at DESC
     """
-    params = [pattern] * 12
-
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
+            cur.execute(sql, [pattern] * 12)
             rows = cur.fetchall()
-        return [_row_to_satsangi(row) for row in rows]
+        return [Devotee(**_ts(r)) for r in rows]
     finally:
         conn.close()
 
 
-def get_all_satsangis() -> list[Satsangi]:
-    """Return all satsangis, newest first."""
+def get_all_devotees() -> list[Devotee]:
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                f"SELECT {', '.join(_ALL_FIELDS)} FROM satsangis ORDER BY created_at DESC"
+                f"SELECT {', '.join(_DEVOTEE_ALL)} FROM devotees ORDER BY created_at DESC"
             )
             rows = cur.fetchall()
-        return [_row_to_satsangi(row) for row in rows]
+        return [Devotee(**_ts(r)) for r in rows]
+    finally:
+        conn.close()
+
+
+# ─── Visits ───
+
+def create_visit(data: VisitCreate) -> Visit:
+    cols = ", ".join(_VISIT_INSERT)
+    phs = ", ".join(["%s"] * len(_VISIT_INSERT))
+    vals = [getattr(data, f) for f in _VISIT_INSERT]
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"INSERT INTO visits ({cols}) VALUES ({phs}) RETURNING {', '.join(_VISIT_ALL)}",
+                vals,
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return Visit(**_ts(row))
+    finally:
+        conn.close()
+
+
+def get_visits_for_devotee(devotee_id: int) -> list[Visit]:
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"SELECT {', '.join(_VISIT_ALL)} FROM visits "
+                f"WHERE devotee_id = %s ORDER BY arrival_date DESC",
+                (devotee_id,),
+            )
+            rows = cur.fetchall()
+        return [Visit(**_ts(r)) for r in rows]
     finally:
         conn.close()

@@ -1,20 +1,15 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Search, AlertCircle, Users, Phone, Mail, MapPin, Calendar } from "lucide-react";
-import { useSatsangiSearch } from "@/hooks/useSatsangiSearch";
-import type { Satsangi } from "@/api/satsangisApi";
+import { useDevoteeSearch } from "@/hooks/useSatsangiSearch";
+import type { Devotee } from "@/api/satsangisApi";
 
 export function SearchPage() {
   const [query, setQuery] = useState("");
-  const { data: results = [], isLoading, error } = useSatsangiSearch(query);
+  const { data: results = [], isLoading, error } = useDevoteeSearch(query);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Search Satsangis</h1>
-        <p className="mt-1 text-sm text-muted">Find registered satsangis by name, phone, ID, or any field</p>
-      </div>
-
       {/* Search bar */}
       <div className="relative">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-faint" />
@@ -82,14 +77,16 @@ export function SearchPage() {
   );
 }
 
-function SatsangiCard({ s }: { s: Satsangi }) {
+function SatsangiCard({ s }: { s: Devotee }) {
   const initials = `${s.first_name[0]}${s.last_name[0]}`.toUpperCase();
   const fullName = `${s.first_name} ${s.last_name}`;
 
   return (
-    <div
+    <Link
+      to="/satsangi/$id"
+      params={{ id: s.satsangi_id }}
       className={[
-        "group rounded-2xl border bg-surface p-5 transition-all duration-200 hover:shadow-md",
+        "group block rounded-2xl border bg-surface p-5 transition-all duration-200 hover:shadow-md cursor-pointer",
         s.banned ? "border-danger/30 bg-danger/5" : "border-border hover:border-muted",
       ].join(" ")}
     >
@@ -158,11 +155,12 @@ function SatsangiCard({ s }: { s: Satsangi }) {
           )}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function Tag({ children, color }: { children: React.ReactNode; color?: "blue" | "green" | "red" }) {
+  /* eslint-disable */
   const palette = {
     blue: "bg-tag-blue-bg text-tag-blue-text border-tag-blue-border",
     green: "bg-tag-green-bg text-tag-green-text border-tag-green-border",

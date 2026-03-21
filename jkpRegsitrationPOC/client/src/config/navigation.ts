@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Search } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 
 export interface NavItem {
   to: string;
@@ -10,4 +10,5 @@ export interface NavItem {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: "/", label: "Search", icon: Search, mobileAccess: "full" },
+  { to: "/add", label: "Add Satsangee", icon: UserPlus, mobileAccess: "full" },
 ];

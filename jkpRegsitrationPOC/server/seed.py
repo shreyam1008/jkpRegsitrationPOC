@@ -1,9 +1,9 @@
-"""Seed the REST database with ~30 realistic satsangi records."""
+"""Seed the database with ~30 realistic devotee records."""
 
 import json
 import urllib.request
 
-API = "http://localhost:8001/api/satsangis"
+API = "http://localhost:8001/api/devotees"
 
 PEOPLE = [
     {"first_name": "Radha", "last_name": "Sharma", "phone_number": "9876543210", "age": 45, "gender": "Female", "city": "Vrindavan", "state": "Uttar Pradesh", "pincode": "281121", "nationality": "Indian", "country": "India", "introduced_by": "Preacher", "email": "radha.sharma@gmail.com"},

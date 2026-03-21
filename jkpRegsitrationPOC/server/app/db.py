@@ -1,6 +1,7 @@
-"""PostgreSQL connection and schema management for REST version."""
+"""PostgreSQL connection and migration runner."""
 
 import logging
+import pathlib
 import psycopg2
 import psycopg2.extras
 
@@ -14,50 +15,7 @@ DB_CONFIG = {
     "password": "postgres",
 }
 
-CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS satsangis (
-    satsangi_id         VARCHAR(8) PRIMARY KEY,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    first_name          VARCHAR(100) NOT NULL,
-    last_name           VARCHAR(100) NOT NULL,
-    phone_number        VARCHAR(20) NOT NULL,
-    age                 INTEGER,
-    date_of_birth       VARCHAR(20),
-    pan                 VARCHAR(20),
-    gender              VARCHAR(10),
-    special_category    VARCHAR(30),
-    nationality         VARCHAR(30) NOT NULL DEFAULT 'Indian',
-    govt_id_type        VARCHAR(30),
-    govt_id_number      VARCHAR(50),
-    id_expiry_date      VARCHAR(20),
-    id_issuing_country  VARCHAR(30),
-    nick_name           VARCHAR(100),
-    print_on_card       BOOLEAN NOT NULL DEFAULT FALSE,
-    introducer          VARCHAR(200),
-    country             VARCHAR(30) NOT NULL DEFAULT 'India',
-    address             TEXT,
-    city                VARCHAR(100),
-    district            VARCHAR(100),
-    state               VARCHAR(100),
-    pincode             VARCHAR(10),
-    emergency_contact   VARCHAR(20),
-    ex_center_satsangi_id VARCHAR(20),
-    introduced_by       VARCHAR(30),
-    has_room_in_ashram  BOOLEAN NOT NULL DEFAULT FALSE,
-    email               VARCHAR(200),
-    banned              BOOLEAN NOT NULL DEFAULT FALSE,
-    first_timer         BOOLEAN NOT NULL DEFAULT FALSE,
-    date_of_first_visit VARCHAR(20),
-    notes               TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_satsangis_name
-    ON satsangis (LOWER(first_name), LOWER(last_name));
-CREATE INDEX IF NOT EXISTS idx_satsangis_phone
-    ON satsangis (phone_number);
-CREATE INDEX IF NOT EXISTS idx_satsangis_email
-    ON satsangis (LOWER(email)) WHERE email IS NOT NULL;
-"""
+MIGRATIONS_DIR = pathlib.Path(__file__).resolve().parent.parent / "migrations"
 
 
 def get_connection():
@@ -66,12 +24,37 @@ def get_connection():
 
 
 def init_db():
-    """Create the satsangis table if it doesn't exist."""
+    """Run all pending migrations in order."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(CREATE_TABLE_SQL)
-        conn.commit()
-        logger.info("Database schema initialized successfully (jkp_reg_poc_rest)")
+            # Ensure migration tracking table exists
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS _migrations (
+                    filename VARCHAR(255) PRIMARY KEY,
+                    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            conn.commit()
+
+            # Get already-applied migrations
+            cur.execute("SELECT filename FROM _migrations ORDER BY filename;")
+            applied = {row[0] for row in cur.fetchall()}
+
+            # Run each .sql file in order
+            sql_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
+            for sql_file in sql_files:
+                if sql_file.name in applied:
+                    continue
+                logger.info("Running migration: %s", sql_file.name)
+                cur.execute(sql_file.read_text())
+                cur.execute(
+                    "INSERT INTO _migrations (filename) VALUES (%s);",
+                    (sql_file.name,),
+                )
+                conn.commit()
+                logger.info("  ✓ %s applied", sql_file.name)
+
+        logger.info("Database migrations complete (jkp_reg_poc_rest)")
     finally:
         conn.close()

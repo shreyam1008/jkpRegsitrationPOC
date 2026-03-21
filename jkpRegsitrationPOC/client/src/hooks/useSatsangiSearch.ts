@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { searchSatsangis } from "@/api/satsangisApi";
+import { searchDevotees } from "@/api/satsangisApi";
 
-export function useSatsangiSearch(query: string) {
+export function useDevoteeSearch(query: string) {
   return useQuery({
-    queryKey: ["satsangis", query],
-    queryFn: () => searchSatsangis(query),
+    queryKey: ["devotees", query],
+    queryFn: () => searchDevotees(query),
     refetchOnWindowFocus: false,
   });
 }
