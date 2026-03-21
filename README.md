@@ -59,6 +59,30 @@ Open **http://localhost:5174** — browser sends grpc-web to proxy (:8080) which
 
 > **Why 3 terminals?** Browsers can't speak native gRPC. The proxy translates grpc-web frames into real gRPC calls. Without Terminal 1 (gRPC server), the proxy has nothing to forward to.
 
+### Run Tests (REST version)
+
+Tests live in `jkpRegsitrationPOC/tests/` — **21 unit tests** (Vitest) + **9 e2e tests** (Playwright).
+
+```bash
+# Install test dependencies (first time only)
+cd jkpRegsitrationPOC/tests
+bun install
+
+# Unit tests (no servers needed)
+bun run test:unit
+
+# E2E tests — headless (auto-starts server :8001 + client :5174)
+bun run test:e2e
+
+# E2E tests — headed (see the browser)
+bunx playwright test --headed
+
+# E2E tests — step-by-step debug mode
+bunx playwright test --debug
+```
+
+> **Note:** Playwright auto-starts both the FastAPI server (`:8001`) and the Vite client (`:5174`) via `webServer` config. If they're already running, it reuses them (`reuseExistingServer: true`).
+
 ### Run Benchmarks (16-test suite)
 
 ```bash
@@ -116,12 +140,22 @@ jkpRegsitrationPOC/
 │   │   │   ├── models.py        ← Pydantic data models
 │   │   │   └── store.py         ← PostgreSQL CRUD operations
 │   │   └── pyproject.toml
-│   └── client/
-│       ├── src/
-│       │   ├── api.ts           ← fetch() calls to REST API
-│       │   ├── App.tsx          ← React routing
-│       │   └── pages/           ← CreatePage, SearchPage
-│       ├── vite.config.ts       ← Port 5173, proxy → :8001
+│   ├── client/
+│   │   ├── src/
+│   │   │   ├── api.ts           ← fetch() calls to REST API
+│   │   │   ├── App.tsx          ← React routing
+│   │   │   └── pages/           ← CreatePage, SearchPage
+│   │   ├── vite.config.ts       ← Port 5173, proxy → :8001
+│   │   └── package.json
+│   └── tests/
+│       ├── e2e/
+│       │   └── registration.spec.ts  ← 9 Playwright e2e tests
+│       ├── unit/
+│       │   ├── api.test.ts           ← API function tests
+│       │   ├── CreatePage.test.tsx   ← Create form tests
+│       │   └── SearchPage.test.tsx   ← Search page tests
+│       ├── playwright.config.ts      ← E2E config (server :8001, client :5174)
+│       ├── vitest.config.ts          ← Unit test config (jsdom)
 │       └── package.json
 │
 ├── jkpRegistrationFULLGRPC/     ← gRPC implementation (no REST)
@@ -146,7 +180,9 @@ jkpRegsitrationPOC/
 │       └── package.json         ← grpc-web, google-protobuf
 │
 ├── benchmarks/
-│   └── bench_standalone.py      ← 10-category benchmark suite
+│   ├── bench_robust.py          ← 16-category benchmark suite
+│   ├── bench_standalone.py      ← Standalone benchmark
+│   └── RESULTS.md               ← Benchmark results
 │
 ├── grpc_instruction.md          ← Detailed gRPC vs REST guide + grpc-web docs
 └── README.md                    ← This file

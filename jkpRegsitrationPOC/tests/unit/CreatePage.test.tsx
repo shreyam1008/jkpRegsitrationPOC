@@ -98,12 +98,11 @@ describe('CreatePage', () => {
     })
   })
 
-  it('renders progress sidebar with section names', () => {
+  it('renders all three collapsible section titles', () => {
     renderPage()
-    expect(screen.getByText('Progress')).toBeInTheDocument()
-    expect(screen.getAllByText('Personal').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Address').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText(/^Other$/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Personal Details')).toBeInTheDocument()
+    expect(screen.getByText('Address Details')).toBeInTheDocument()
+    expect(screen.getByText('Other Details')).toBeInTheDocument()
   })
 
   it('renders checkboxes for boolean fields', () => {

@@ -9,8 +9,8 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'cd ../server && PATH="$HOME/.local/bin:$PATH" uv run uvicorn app.main:app --port 8000',
-      port: 8000,
+      command: 'cd ../server && PATH="$HOME/.local/bin:$PATH" uv run uvicorn app.main:app --port 8001',
+      port: 8001,
       reuseExistingServer: true,
     },
     {

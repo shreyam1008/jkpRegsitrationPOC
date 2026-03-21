@@ -1,106 +1,95 @@
-import { NavLink, useLocation } from 'react-router'
-import { clsx } from 'clsx'
-import {
-  Search, UserPlus, X, Menu, Server, Database,
-} from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ChevronLeft, X } from "lucide-react";
+import { NAV_ITEMS } from "@/config/navigation";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { useSidebarStore } from "@/stores/useSidebarStore";
 
-const NAV_ITEMS = [
-  { to: '/search', label: 'Search', icon: Search },
-  { to: '/create', label: 'Add Devotee', icon: UserPlus },
-]
+export function Sidebar() {
+  const { isOpen, toggle, setOpen } = useSidebarStore();
+  const currentPath = useRouterState({ select: (s) => s.location.pathname });
+  const isMobile = useIsMobile();
 
-export default function Sidebar() {
-  const [open, setOpen] = useState(false)
-  const location = useLocation()
-
-  useEffect(() => {
-    setOpen(false)
-  }, [location.pathname])
+  const closeMobile = () => { if (isMobile) setOpen(false); };
 
   return (
     <>
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-[10px] font-bold tracking-tight text-white">
-            JKP
-          </div>
-          <span className="text-sm font-bold text-gray-900">Registration System</span>
-        </div>
-        <button
-          onClick={() => setOpen(!open)}
-          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 transition"
-          aria-label="Toggle menu"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-      </header>
-
-      {/* Backdrop */}
-      {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
-          onClick={() => setOpen(false)}
-        />
-      )}
+      {/* Backdrop — always in DOM for smooth fade transition, mobile only */}
+      <div
+        className={`fixed inset-0 z-40 bg-backdrop backdrop-blur-sm transition-opacity duration-300 md:hidden ${isOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* Sidebar panel */}
-      <aside className={clsx(
-        'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-gray-200 bg-white transition-transform duration-300 lg:static lg:translate-x-0',
-        open ? 'translate-x-0' : '-translate-x-full',
-      )}>
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-5 py-5 border-b border-gray-100">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-[11px] font-bold tracking-tight text-white shadow-sm">
-            JKP
-          </div>
-          <div>
-            <div className="text-sm font-bold text-gray-900 leading-tight">JKP Registration</div>
-            <div className="text-[11px] text-gray-400">REST + PostgreSQL</div>
-          </div>
+      <aside
+        className={[
+          "flex flex-col border-r transition-all duration-300 ease-out",
+          // Mobile: fixed full-height drawer
+          "fixed top-0 left-0 z-50 h-full w-72",
+          isOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop: static, collapsible width
+          "md:static md:z-auto md:h-auto md:translate-x-0",
+          isOpen ? "md:w-56" : "md:w-14",
+          "border-border bg-surface-alt",
+        ].join(" ")}
+      >
+        {/* Mobile drawer header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 md:hidden">
+          <span className="text-sm font-semibold tracking-tight">Menu</span>
+          <button
+            onClick={() => setOpen(false)}
+            className="rounded-lg p-1.5 transition-colors hover:bg-hover"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Status */}
-        <div className="px-5 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-4 text-[11px]">
-            <span className="flex items-center gap-1.5 text-gray-400">
-              <Server className="h-3 w-3" />
-              Server
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
-            </span>
-            <span className="flex items-center gap-1.5 text-gray-400">
-              <Database className="h-3 w-3" />
-              Database
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
-            </span>
-          </div>
-        </div>
+        {/* Desktop top spacer */}
+        <div className="hidden h-3 md:block" />
 
-        {/* Nav */}
-        <nav className="flex-1 sidebar-scroll overflow-y-auto px-3 py-4 space-y-1">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) => clsx(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
-                isActive
-                  ? 'bg-brand-50 text-brand-700 shadow-sm'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
-              )}
-            >
-              <Icon className="h-[18px] w-[18px]" />
-              {label}
-            </NavLink>
-          ))}
+        {/* Nav items — scrollable when list grows */}
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pt-1">
+          {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
+            const active = currentPath === to;
+            return (
+              <Link
+                key={to}
+                to={to}
+                onClick={closeMobile}
+                className={[
+                  "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  !isOpen ? "md:justify-center md:px-0" : "",
+                  active
+                    ? "bg-active text-foreground"
+                    : "text-muted hover:bg-hover hover:text-foreground",
+                ].join(" ")}
+                title={!isOpen ? label : undefined}
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-current" />
+                )}
+                <Icon size={18} strokeWidth={active ? 2.25 : 1.75} />
+                <span className={isOpen ? "" : "md:hidden"}>{label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-gray-100 px-5 py-4">
-          <p className="text-[10px] text-gray-300 text-center">JKP Registration POC v1.0</p>
-        </div>
+        {/* Collapse toggle — desktop only */}
+        <button
+          onClick={toggle}
+          className={[
+            "mx-2 mb-3 hidden items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors md:flex",
+            !isOpen ? "justify-center" : "",
+            "text-faint hover:bg-hover hover:text-foreground",
+          ].join(" ")}
+          aria-label="Toggle sidebar"
+        >
+          <ChevronLeft size={16} className={`transition-transform duration-200 ${!isOpen ? "rotate-180" : ""}`} />
+          {isOpen && <span>Collapse</span>}
+        </button>
       </aside>
     </>
-  )
+  );
 }
