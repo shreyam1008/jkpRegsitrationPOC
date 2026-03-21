@@ -1,0 +1,35 @@
+// Minimal proto: just enough to LIST devotees from the database.
+// One message, one RPC — that's it.
+
+syntax = "proto3";
+
+package jkp.demo.v1;
+
+// ─── Messages ───
+
+message Devotee {
+  int32  id              = 1;
+  string satsangi_id     = 2;
+  string first_name      = 3;
+  string last_name       = 4;
+  string phone_number    = 5;
+  optional string gender = 6;
+  optional int32  age    = 7;
+  optional string city   = 8;
+  optional string state  = 9;
+  string nationality     = 10;
+  string created_at      = 11;
+}
+
+message DevoteeList {
+  repeated Devotee devotees = 1;
+}
+
+message Empty {}
+
+// ─── Service ───
+
+service DevoteeService {
+  // One RPC: list all devotees
+  rpc ListDevotees (Empty) returns (DevoteeList);
+}
