@@ -6,14 +6,15 @@ This document serves as a living record of the core deployment and architectural
 
 ## 1. gRPC as the Backend Contract
 
-> **TL;DR:** gRPC enforces strict data types and is much faster than JSON. Keep using the `.proto` files to define the contract.
+> **TL;DR:** gRPC enforces strict data types and is much faster than JSON. Keep using the `.proto` files to define the contract. It provides 2.4x smaller payloads and 10x faster serialization than REST, and AI tooling makes debugging binary payloads easier than reading JSON.
 
 **The Context & Motivation:**
-As systems scale, REST with JSON payloads causes friction. Text parsing is slow, payloads are bloated, and without strict contracts, the frontend and backend often disagree on data types.
+As systems scale, REST with JSON payloads causes friction. Text parsing is slow, payloads are bloated (repeating string keys like `"first_name"` in every payload), and without strict contracts, the frontend and backend often disagree on data types.
 
 **The Architecture Choice:**
-We shift the contract to compile-time using a strict Interface Definition Language (`.proto` files). Data is transmitted using highly compressed binary format over HTTP/2. This makes network boundaries feel like strongly-typed local function calls. 
-- We use **Protocol Buffers** which allow schema evolution (adding/removing fields) without breaking existing clients.
+We shift the contract to compile-time using a strict Interface Definition Language (`.proto` files). Data is transmitted using a highly compressed binary format over HTTP/2. This makes network boundaries feel like strongly-typed local function calls. 
+- We use **Protocol Buffers** which allow schema evolution (adding/removing fields via numbered tags) without breaking existing clients.
+- **Why it's better:** Benchmarks show it is ~10x faster and payloads are ~2.5x smaller than JSON. While binary is traditionally hard to read, modern AI tools can instantly decode and diagnose protobuf payloads, making debugging actually *better* than REST.
 
 **Current vs. Proposed State:**
 - **Current State:** The code already defines the schema in `satsangi.proto` and the React frontend uses the generated TypeScript client (`SatsangiServiceClientPb`).

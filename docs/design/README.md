@@ -11,5 +11,7 @@ This folder contains two types of documents:
 2. **Point-in-Time Reviews:** (e.g., `poc-deployment-review-22-03-2026.md`) These are historical snapshots reviewing the system at a specific date. They show how the system migrated from a POC to production over time.
 
 * [poc-deployment-review-22-03-2026.md](./poc-deployment-review-22-03-2026.md) - A historical point-in-time review of the initial local POC setup vs the planned production architecture.
+* [000-architecture-overview.md](./000-architecture-overview.md) - **(Living Document)** A high-level overview and diagram mapping out the "power loop" from the browser to the database.
 * [002-architectural-choices.md](./002-architectural-choices.md) - **(Living Document)** A team-friendly breakdown of why we chose gRPC, Edge Web Servers, and self-hosted PostgreSQL.
 * [003-web-hosting-concepts.md](./003-web-hosting-concepts.md) - **(Living Document)** A beginner-friendly guide explaining CORS, Origins, Reverse Proxies, and why CDNs aren't needed for this internal application.
+* [004-grpc-architecture-guide.md](./004-grpc-architecture-guide.md) - **(Living Document)** A deep dive into why gRPC is used, performance metrics vs REST, and how AI-assisted debugging changes the workflow.
