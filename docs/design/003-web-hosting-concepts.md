@@ -91,23 +91,3 @@ A server is **only** exposed to the public internet if:
 By using a domain name instead of localhost, you are simply giving your internal team an easy-to-remember name to access the server over the private network. It does not automatically make the server public.
 
 ---
-
-## 4. Do we need a CDN?
-
-**Short answer: No.**
-
-### What is a CDN?
-CDN stands for Content Delivery Network. 
-Imagine you build Netflix. You have users in Tokyo, London, and New York. If your server is in New York, the users in Tokyo will experience a long delay waiting for the website files to travel across the ocean. 
-
-A CDN takes your static files (like your React `index.html` and images) and copies them to hundreds of servers all over the globe. That way, the user in Tokyo downloads the website from a server physically located in Tokyo. It makes public websites lightning fast.
-
-### Why you don't need it
-Your project scope:
-- It is an **in-house** application.
-- It is used by a small team of **5-6 staff members**.
-- They are likely sitting in the same office, or at least in the same country.
-
-Adding a CDN adds extreme complexity to your deployment process. You have to write scripts to clear the CDN memory every time you update the app, and you have to pay for a third-party service. 
-
-For 5-6 internal users, the Reverse Proxy (Caddy/Nginx) serving the files directly from your single server is incredibly fast, practically free, and infinitely easier to manage.

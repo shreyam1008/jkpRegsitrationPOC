@@ -1,86 +1,70 @@
-# Architecture Choices: The Inventor's Perspective (with Current vs Proposed Comparisons)
+# Architecture Choices & Guidelines
 
-This document explains the core deployment and architectural decisions made for the JKP Registration system, applying the "Inventor Mental Model" to expose the underlying architectural "why" behind each choice. It also explicitly compares the *Current State* (what is currently in the codebase) with the *Proposed State* (the target production deployment).
+This document serves as a living record of the core deployment and architectural decisions made for the JKP Registration system. It is designed to be read by the team to understand *why* the system is built this way, and how it differs from the initial local development state.
 
 ---
 
 ## 1. gRPC as the Backend Contract
 
-**1. Core Motivation**
-As distributed systems scale, REST over HTTP/1.1 with JSON payloads introduces severe friction: text parsing is CPU-intensive, payloads are bloated with repeated keys, and most critically, lack of strict contract enforcement leads to runtime type mismatches between client and server.
+> **TL;DR:** gRPC enforces strict data types and is much faster than JSON. Keep using the `.proto` files to define the contract.
 
-**2. Key Insight**
-Shift the contract to compile-time using a strict Interface Definition Language (IDL), and transmit data using a highly compressed binary format over multiplexed HTTP/2. The "aha" moment is realizing that the network boundary should feel exactly like calling a strongly-typed local function.
+**The Context & Motivation:**
+As systems scale, REST with JSON payloads causes friction. Text parsing is slow, payloads are bloated, and without strict contracts, the frontend and backend often disagree on data types.
 
-**3. Refinements & Extensions**
-- **Protocol Buffers:** Evolved from the need for forward/backward compatibility. Field numbering allows schema evolution without breaking existing clients.
-- **Multiplexing & Streaming:** HTTP/2 allows multiple concurrent calls over a single TCP connection, eliminating head-of-line blocking and enabling native streaming without WebSockets.
+**The Architecture Choice:**
+We shift the contract to compile-time using a strict Interface Definition Language (`.proto` files). Data is transmitted using highly compressed binary format over HTTP/2. This makes network boundaries feel like strongly-typed local function calls. 
+- We use **Protocol Buffers** which allow schema evolution (adding/removing fields) without breaking existing clients.
 
-**4. The Mental Anchor**
-gRPC is simply **compile-time type safety stretched across a network boundary**.
-
-**5. Current vs. Proposed State**
+**Current vs. Proposed State:**
 - **Current State:** The code already defines the schema in `satsangi.proto` and the React frontend uses the generated TypeScript client (`SatsangiServiceClientPb`).
-- **Proposed State:** Keep this exactly as is. You are already doing this correctly.
+- **Proposed State:** Keep this exactly as is. We are already doing this correctly.
 
 ---
 
 ## 2. Dedicated grpc-web Proxy
 
-**1. Core Motivation**
-Browsers fundamentally cannot speak native gRPC. They lack low-level control over HTTP/2 framing and cannot read trailing headers (trailers) which gRPC relies on for status codes.
+> **TL;DR:** Browsers can't speak native gRPC, so they need a translator. We are splitting the translator (proxy) and the business logic (backend) into two separate services for better scaling and debugging.
 
-**2. Key Insight**
-Introduce a dedicated translation layer (a proxy) that intercepts standard HTTP/1.1 (or HTTP/2) browser requests, unwraps the payload, forwards a native gRPC call to the backend, and repacks the response (and trailers) into a format the browser can digest.
+**The Context & Motivation:**
+Browsers fundamentally cannot speak native gRPC because they lack low-level control over HTTP/2 framing. 
 
-**3. Refinements & Extensions**
-- **Decoupling Business Logic:** Moving this translation out of the application code keeps the core backend "pure" gRPC.
+**The Architecture Choice:**
+We introduce a dedicated translation layer (a proxy) that intercepts standard browser requests, unwraps the payload, forwards a native gRPC call to the backend, and repacks the response for the browser. This keeps the core backend "pure" gRPC and decouples translation from business logic.
 
-**4. The Mental Anchor**
-The proxy is an **impedance matcher**. It translates the restrictive vocabulary of browser networking into the unrestricted binary streams required by backend microservices.
-
-**5. Current vs. Proposed State**
-- **Current State:** You have a custom FastAPI app (`jkpRegistrationFULLGRPC/server/app/main.py`) running on port `8080` acting as the proxy. *However*, this proxy script currently imports and starts the native gRPC server itself (`start_grpc_server(port=50051)`). They run in the same Python process.
-- **Proposed State:** Separate them into two independent services (e.g., in a `docker-compose.yml`). The proxy container only does translation; the backend container only does business logic. This separation is standard for production because it allows scaling and restarting them independently.
+**Current vs. Proposed State:**
+- **Current State:** You have a custom FastAPI app (`main.py`) running on port `8080` acting as the proxy. *However*, this proxy script currently imports and starts the native gRPC server itself. They run in the same Python process.
+- **Proposed State:** Separate them into two independent services (e.g., in a `docker-compose.yml`). The proxy container only does translation; the backend container only does business logic. 
 
 ---
 
 ## 3. The Edge Web Server (Solving CORS and Hosting the App)
 
-### The Problem: Two Servers, One Browser
-Hosting frontends on `app.domain.com` and backends on `api.domain.com` (or separate ports like `:5174` and `:8080`) triggers the browser's Same-Origin Policy (SOP). This forces complex CORS preflight requests (`OPTIONS`) and complicates security. Furthermore, for internal applications, treating the frontend as a separate entity from the backend introduces version drift (the UI expects v2 of the API, but the backend is still on v1).
+> **TL;DR:** We will put an Edge Web Server (like Caddy/Nginx) in front of everything to kill CORS errors and serve the built React files directly. The heavy Vite dev server will be removed from production.
 
-### Key Insight
-The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web Server" like Caddy or Nginx) at the very front of the system, we can solve both problems at once. The Edge Web Server routes traffic based on URL paths, making the browser perceive a single, unified origin. Simultaneously, it serves the pre-built static React application directly, guaranteeing version synchronization with the backend APIs it protects.
+**The Context & Motivation:**
+Hosting frontends and backends on different domains or ports (like `:5174` and `:8080`) triggers the browser's Same-Origin Policy (SOP). This forces complex CORS preflight requests and complicates security. Also, treating the frontend as a completely separate entity from the backend can introduce version drift (the UI expects v2 of the API, but the backend is still on v1).
 
-### Refinements & Extensions
-- **Path-Based Routing:** `/api/*` or `/grpc/*` flows to the backend proxy, everything else to the static frontend.
-- **Atomic Deployments:** UI and API are deployed together behind this single gateway.
-- **Unified TLS Termination:** Certificates are managed at a single edge point, reducing operational overhead.
+**The Architecture Choice:**
+The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web Server") at the very front of the system, we solve both problems:
+1. It routes traffic based on URL paths (`/grpc/` to proxy, `/` to frontend), making the browser perceive a single, unified origin. This instantly eliminates CORS issues.
+2. It serves the pre-built static React application directly, guaranteeing version synchronization with the backend APIs it protects. Deployments become atomic.
 
-### The Mental Anchor
-**Consolidate at the edge.** By masking distributed microservices and static UI files behind a single Web Server, you bypass browser security friction and guarantee deployment atomicity.
-
-### Current vs. Proposed State
-- **Current State:** The frontend runs on `http://localhost:5174` (via a heavy Vite dev server), the proxy runs on `http://localhost:8080`, and the backend is on `localhost:50051`. Because they are on different ports, you had to add a very permissive CORS policy (`allow_origins=["*"]`) just to make it work locally.
-- **Proposed State:** You will run `bun run build` to generate plain, static HTML/JS/CSS files. You will put a web server (like Caddy or Nginx) in front on port 443 (HTTPS). Staff visit `https://registration.yourorg.org`. The web server serves the static React files for `/` and routes `/grpc/` to the proxy. Because it's all one domain, CORS issues disappear and the Node development server is entirely removed.
+**Current vs. Proposed State:**
+- **Current State:** The frontend runs on `http://localhost:5174` (via a heavy Vite dev server), the proxy runs on `http://localhost:8080`, and the backend is on `localhost:50051`. Because they are on different ports, you had to add a very permissive CORS policy (`allow_origins=["*"]`).
+- **Proposed State:** You will run `bun run build` to generate plain, static HTML/JS/CSS files. You will put an Edge Web Server on port 443 (HTTPS) to serve these files and route backend traffic. The Node development server is removed.
 
 ---
 
 ## 4. Self-Hosted PostgreSQL (with Cloud-Ready Path)
 
-**1. Core Motivation**
-Data sensitivity mandates strict local custody (self-hosting), but hardcoding local infrastructure (e.g., `localhost:5432`) creates a brittle system that cannot easily migrate to a managed public cloud later.
+> **TL;DR:** We self-host the database for data privacy, but we inject the connection string via Environment Variables so we can move to AWS/Cloud later without changing any Python code.
 
-**2. Key Insight**
-Treat the database purely as an attached resource accessible via a standardized URI. The application code must remain entirely ignorant of *where* the database lives, relying solely on environment injection to locate its state.
+**The Context & Motivation:**
+Data sensitivity mandates strict local custody (self-hosting). However, hardcoding local infrastructure details creates a brittle system that cannot easily migrate to a managed public cloud later when security postures or scale requires it.
 
-**3. Refinements & Extensions**
-- **Network Isolation:** The database binds only to a private internal network interface.
+**The Architecture Choice:**
+Treat the database purely as an attached resource accessible via a standardized URI. The application code must remain entirely ignorant of *where* the database lives, relying solely on environment injection (Environment Variables) to locate its state. The database will bind only to a private internal network interface for security.
 
-**4. The Mental Anchor**
-**State is a strictly injected dependency.**
-
-**5. Current vs. Proposed State**
+**Current vs. Proposed State:**
 - **Current State:** The codebase currently assumes the database is running locally and likely has connection details hardcoded or loosely managed for local dev.
-- **Proposed State:** The application must read the connection string from an environment variable (e.g., `DATABASE_URL`). In your self-hosted production environment, you will run a dedicated PostgreSQL instance on a secure, private network, and inject that specific URL into the backend container. When you eventually move to the cloud, you simply change the environment variable to point to AWS RDS/Azure without touching the Python code.
+- **Proposed State:** The application must read the connection string from an environment variable (e.g., `DATABASE_URL`). You will run a dedicated PostgreSQL instance on a secure, private network, and inject that specific URL into the backend container.

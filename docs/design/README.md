@@ -6,6 +6,10 @@ We use this structure to document the "why" behind the technologies we use, maki
 
 ## Documents
 
-* [001: Deployment Review](./001-deployment-review.md) - Review of the initial gRPC deployment approach vs. the target production shape (self-hosted PostgreSQL, dedicated grpc-web proxy, single-domain HTTPS).
-* [002: Architectural Choices](./002-architectural-choices.md) - An "Inventor's Perspective" deep dive into why we chose gRPC, dedicated proxies, and same-domain React hosting, with a comparison to the previous local dev state.
-* [003: Web Hosting Concepts](./003-web-hosting-concepts.md) - A beginner-friendly guide explaining CORS, Origins, Reverse Proxies (like Caddy/Nginx), and why CDNs aren't needed for this internal application.
+This folder contains two types of documents:
+1. **Living Documents:** (e.g., `002-architectural-choices.md`) These describe the *current* state and reasoning of the system architecture. They should be updated as the architecture evolves.
+2. **Point-in-Time Reviews:** (e.g., `poc-deployment-review-22-03-2026.md`) These are historical snapshots reviewing the system at a specific date. They show how the system migrated from a POC to production over time.
+
+* [poc-deployment-review-22-03-2026.md](./poc-deployment-review-22-03-2026.md) - A historical point-in-time review of the initial local POC setup vs the planned production architecture.
+* [002-architectural-choices.md](./002-architectural-choices.md) - **(Living Document)** A team-friendly breakdown of why we chose gRPC, Edge Web Servers, and self-hosted PostgreSQL.
+* [003-web-hosting-concepts.md](./003-web-hosting-concepts.md) - **(Living Document)** A beginner-friendly guide explaining CORS, Origins, Reverse Proxies, and why CDNs aren't needed for this internal application.
