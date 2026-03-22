@@ -39,44 +39,56 @@ In your current code, you have a line that says `allow_origins=["*"]`. This tell
 
 ---
 
-## 2. What is a "Reverse Proxy" (like Caddy or Nginx)?
+## 2. What is an "Edge Web Server" (like Caddy or Nginx)?
 
 We want to get rid of CORS entirely because it causes headaches and security risks. To do that, we need to trick the browser into thinking the React app and the Backend are on the **exact same Origin**.
 
 But a computer cannot run two different programs on the exact same port. You can't put React on `localhost:80` AND the backend on `localhost:80` at the same time. 
 
 ### The Solution: A Traffic Cop
-A Reverse Proxy (like Caddy or Nginx) is a piece of software that sits at the very front of your server, listening on a single port (like port 443 for HTTPS). It acts as a traffic cop.
+An Edge Web Server (often called a Reverse Proxy) like Caddy or Nginx is a piece of software that sits at the very front of your server, listening on a single port (like port 443 for HTTPS). It acts as a traffic cop.
 
-When a user types `https://registration.yourorg.org` into their browser, the request hits the Reverse Proxy first. 
+When a user types `https://registration.yourorg.org` into their browser, the request hits the Edge Web Server first. 
 
-The proxy looks at the URL path and directs traffic internally:
-- If the user asks for `/` (just the website), the proxy says: *"Ah, you want the website. Let me grab the React files for you."*
-- If the React app sends data to `/grpc/save_user`, the proxy says: *"Ah, this starts with /grpc/. Let me forward this invisibly to the backend program."*
+The server looks at the URL path and directs traffic internally:
+- If the user asks for `/` (just the website), the server says: *"Ah, you want the website. Let me grab the React files for you."*
+- If the React app sends data to `/grpc/save_user`, the server says: *"Ah, this starts with /grpc/. Let me forward this invisibly to the backend program."*
 
 ### Why this is brilliant:
-To the web browser, everything is happening on `https://registration.yourorg.org`. It doesn't know that behind the scenes, there are two different programs. 
+To the web browser, everything is happening on `https://registration.yourorg.org`. It doesn't know that behind the scenes, there are different programs doing the work. 
 Because the browser sees only **one origin**, the Same-Origin Policy is satisfied. **CORS errors disappear completely.** You don't need `allow_origins=["*"]` anymore. It is instantly highly secure.
+
+### Serving the App (Same-Domain Hosting)
+Currently, you run `bun run dev`. This starts a heavy development server. When you are ready for production, you run a command called `bun run build`. 
+This command takes all your fancy React code, squishes it down, and spits out pure, simple, static files: `index.html`, `.js`, and `.css`.
+
+Instead of paying for a separate service to host these static files, we just hand them to our Edge Web Server (Caddy/Nginx). 
+
+This is what we mean by "Same Domain Hosting". Your frontend (the static files) and your backend (the Python code) are living on the exact same server machine, being handled by the exact same traffic cop under the exact same domain name.
 
 ---
 
-## 3. Same Domain React App Hosting
+## 3. Localhost vs. a Domain Name (Does a domain mean it's public?)
 
-### How are you running React right now?
-Currently, you run `bun run dev`. This starts a "Development Server" built by a tool called Vite. This server is heavy. It watches your files, and if you type a new line of code, it instantly refreshes your browser. It is amazing for writing code, but it is **terrible** for production. It is slow, uses too much memory, and isn't designed to handle real users.
+A common point of confusion is what a domain name actually means for security.
 
-### How it should be in Production
-When you are ready for production, you run a command called `bun run build`. 
-This command takes all your fancy React code, squishes it down, removes all the development tools, and spits out pure, simple, static files: `index.html`, some `.js` files, and some `.css` files.
+### What is Localhost?
+`localhost` is a special networking term that literally means "this exact computer right here." 
+If you run your app on `localhost:5174`, the only person in the entire world who can access it is you, sitting at that specific keyboard. It is perfectly secure, but useless for a team of 5-6 staff members.
 
-These are just dumb, static files. They don't need a heavy Node.js or Bun server to run them. 
+### What is a Domain?
+A domain name (like `registration.yourorg.org`) is simply a human-readable label that points to an IP Address. It is a phone book entry.
 
-### "Same Domain Hosting"
-Instead of paying for a separate service to host these static files, we just take those files and hand them to our Reverse Proxy (Caddy/Nginx). 
+### Does having a Domain mean my app is on the public internet?
+**No.** This is a critical point.
 
-We tell the Reverse Proxy: *"If someone visits the website, just hand them these static files."*
+You can configure an "Internal DNS" (like a private company phone book). In this setup, if someone at home types `registration.yourorg.org`, it will fail. But if they are in the office building, or connected to the company VPN, the company's private router knows that `registration.yourorg.org` points to `192.168.1.50` (the IP address of your internal server).
 
-This is what "Same Domain Hosting" means. Your frontend (the static files) and your backend (the Python code) are living on the exact same server machine, being served by the exact same traffic cop (Caddy/Nginx) under the exact same domain name.
+A server is **only** exposed to the public internet if:
+1. You explicitly open your network firewalls to allow outside traffic in.
+2. You put the domain in a public, global DNS registry pointing to a public IP.
+
+By using a domain name instead of localhost, you are simply giving your internal team an easy-to-remember name to access the server over the private network. It does not automatically make the server public.
 
 ---
 

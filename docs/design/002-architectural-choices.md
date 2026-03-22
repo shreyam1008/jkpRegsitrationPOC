@@ -45,47 +45,29 @@ The proxy is an **impedance matcher**. It translates the restrictive vocabulary 
 
 ---
 
-## 3. Single Domain Over HTTPS
+## 3. The Edge Web Server (Solving CORS and Hosting the App)
 
-**1. Core Motivation**
-Hosting frontends on `app.domain.com` and backends on `api.domain.com` (or separate ports like `:5174` and `:8080`) triggers the browser's Same-Origin Policy (SOP). This forces complex CORS preflight requests (`OPTIONS`) and complicates security.
+### The Problem: Two Servers, One Browser
+Hosting frontends on `app.domain.com` and backends on `api.domain.com` (or separate ports like `:5174` and `:8080`) triggers the browser's Same-Origin Policy (SOP). This forces complex CORS preflight requests (`OPTIONS`) and complicates security. Furthermore, for internal applications, treating the frontend as a separate entity from the backend introduces version drift (the UI expects v2 of the API, but the backend is still on v1).
 
-**2. Key Insight**
-The browser trusts the origin exactly. By placing a reverse proxy at the edge that routes traffic based on URL paths (rather than subdomains or ports), the browser perceives a single, unified origin.
+### Key Insight
+The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web Server" like Caddy or Nginx) at the very front of the system, we can solve both problems at once. The Edge Web Server routes traffic based on URL paths, making the browser perceive a single, unified origin. Simultaneously, it serves the pre-built static React application directly, guaranteeing version synchronization with the backend APIs it protects.
 
-**3. Refinements & Extensions**
+### Refinements & Extensions
 - **Path-Based Routing:** `/api/*` or `/grpc/*` flows to the backend proxy, everything else to the static frontend.
+- **Atomic Deployments:** UI and API are deployed together behind this single gateway.
+- **Unified TLS Termination:** Certificates are managed at a single edge point, reducing operational overhead.
 
-**4. The Mental Anchor**
-**Consolidate at the edge to deceive the browser.** By masking distributed microservices behind a single URL, you bypass browser security friction.
+### The Mental Anchor
+**Consolidate at the edge.** By masking distributed microservices and static UI files behind a single Web Server, you bypass browser security friction and guarantee deployment atomicity.
 
-**5. Current vs. Proposed State**
-- **Current State:** The frontend runs on `http://localhost:5174`, the proxy runs on `http://localhost:8080`, and the backend is on `localhost:50051`. Because the frontend (`5174`) calls a different port (`8080`), you had to add a very permissive CORS policy (`allow_origins=["*"]`) in `main.py` just to make it work locally.
-- **Proposed State:** Put a web server (like Caddy or Nginx) in front on port 443 (HTTPS). Staff visit `https://registration.yourorg.org`. The web server routes `/` to the React app and `/grpc/` to the proxy. Because it's all one domain, you don't need wild CORS policies anymore.
-
----
-
-## 4. Same-Domain React App Hosting
-
-**1. Core Motivation**
-For internal applications, treating the frontend as a highly distributed, CDN-hosted artifact separate from backend deployments introduces version drift (the UI expects v2 of the API, but the backend is still on v1).
-
-**2. Key Insight**
-For moderate-scale internal tools, the frontend is just another static asset of the deployment. Serve the pre-built React application from the same physical infrastructure and edge gateway as the backend to guarantee version synchronization.
-
-**3. Refinements & Extensions**
-- **Atomic Deployments:** UI and API are deployed together.
-
-**4. The Mental Anchor**
-**Deployment atomicity over geographic distribution.** Guaranteeing that the UI perfectly matches the API version is vastly more important than global CDN delivery times for an internal tool.
-
-**5. Current vs. Proposed State**
-- **Current State:** You are running the React app using the Vite development server (`bun run dev`, which spins up a live-reloading Node server on `5174`).
-- **Proposed State:** You will run `bun run build` to generate plain, static HTML/JS/CSS files. The edge web server (Caddy/Nginx) will serve these static files directly. The Node/Bun development server is entirely removed from the production environment.
+### Current vs. Proposed State
+- **Current State:** The frontend runs on `http://localhost:5174` (via a heavy Vite dev server), the proxy runs on `http://localhost:8080`, and the backend is on `localhost:50051`. Because they are on different ports, you had to add a very permissive CORS policy (`allow_origins=["*"]`) just to make it work locally.
+- **Proposed State:** You will run `bun run build` to generate plain, static HTML/JS/CSS files. You will put a web server (like Caddy or Nginx) in front on port 443 (HTTPS). Staff visit `https://registration.yourorg.org`. The web server serves the static React files for `/` and routes `/grpc/` to the proxy. Because it's all one domain, CORS issues disappear and the Node development server is entirely removed.
 
 ---
 
-## 5. Self-Hosted PostgreSQL (with Cloud-Ready Path)
+## 4. Self-Hosted PostgreSQL (with Cloud-Ready Path)
 
 **1. Core Motivation**
 Data sensitivity mandates strict local custody (self-hosting), but hardcoding local infrastructure (e.g., `localhost:5432`) creates a brittle system that cannot easily migrate to a managed public cloud later.
