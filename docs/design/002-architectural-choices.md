@@ -37,7 +37,7 @@ We shift the contract to compile-time using a strict Interface Definition Langua
 
 ---
 
-## 2. Dedicated grpc-web Proxy
+## 3. Dedicated grpc-web Proxy
 
 > **TL;DR:** Browsers can't speak native gRPC, so they need a translator. We are splitting the translator (proxy) and the business logic (backend) into two separate services for better scaling and debugging.
 
@@ -53,7 +53,7 @@ We introduce a dedicated translation layer (a proxy) that intercepts standard br
 
 ---
 
-## 3. The Edge Web Server (Solving CORS and Hosting the App)
+## 4. The Edge Web Server (Solving CORS and Hosting the App)
 
 > **TL;DR:** We will put an Edge Web Server (like Caddy/Nginx) in front of everything to kill CORS errors and serve the built React files directly. The heavy Vite dev server will be removed from production.
 
@@ -71,7 +71,7 @@ The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web 
 
 ---
 
-## 6. Cloudflare Integration (Public Readiness & WAF)
+## 5. Cloudflare Integration (Public Readiness & WAF)
 
 > **TL;DR:** We integrate Cloudflare primarily to support future public self-registration by providing a massive shield (Web Application Firewall) against bots and malicious traffic, while keeping our internal server secure. In Phase 1, it provides simple Email OTP for our 20 users.
 
@@ -86,7 +86,7 @@ We place the application behind **Cloudflare**.
 
 ---
 
-## 7. Database Backup & Recovery Strategy
+## 6. Database Backup & Recovery Strategy
 
 > **TL;DR:** We are starting with simple interval snapshots stored on a secondary in-house server, with clear upgrade paths to Cloud storage or Managed Databases as the system scales.
 
