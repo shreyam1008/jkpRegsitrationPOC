@@ -4,7 +4,22 @@ This document serves as a living record of the core deployment and architectural
 
 ---
 
-## 1. gRPC as the Backend Contract
+## 1. Web Application over Desktop Client
+
+> **TL;DR:** A responsive Web App ensures zero-installation rollouts, instant global updates, immediate security patching, and paves the way for future public self-registration.
+
+**The Context & Motivation:**
+Initially, staff might use PCs to register members, which could suggest a native desktop app. However, a desktop app requires manual installation, OS-specific updates, and restricts staff to specific machines across our 4-5 geographies. Furthermore, the roadmap includes two critical future requirements:
+1. **Mobile Access:** Staff need read/write access via mobile devices while on the floor.
+2. **Future Self-Registration:** Eventually, users will register themselves from their own devices.
+
+**The Architecture Choice:**
+We build a responsive Web Application (React). 
+- **Why it's better:** Updates are instant and global—there is no local troubleshooting involved. If a security vulnerability is found, patching the web app instantly protects all users. It guarantees that any device with a browser can access the system. We mandate a mobile-friendly UI design from day one to support staff and prepare the exact same UI components for future public self-registration.
+
+---
+
+## 2. gRPC as the Backend Contract
 
 > **TL;DR:** gRPC enforces strict data types and is much faster than JSON. Keep using the `.proto` files to define the contract. It provides 2.4x smaller payloads and 10x faster serialization than REST, and AI tooling makes debugging binary payloads easier than reading JSON.
 
@@ -56,16 +71,37 @@ The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web 
 
 ---
 
-## 4. Self-Hosted PostgreSQL (with Cloud-Ready Path)
+## 6. Cloudflare Integration (Public Readiness & WAF)
 
-> **TL;DR:** We self-host the database for data privacy, but we inject the connection string via Environment Variables so we can move to AWS/Cloud later without changing any Python code.
+> **TL;DR:** We integrate Cloudflare primarily to support future public self-registration by providing a massive shield (Web Application Firewall) against bots and malicious traffic, while keeping our internal server secure. In Phase 1, it provides simple Email OTP for our 20 users.
 
 **The Context & Motivation:**
-Data sensitivity mandates strict local custody (self-hosting). However, hardcoding local infrastructure details creates a brittle system that cannot easily migrate to a managed public cloud later when security postures or scale requires it.
+While Phase 1 only serves ~20 internal staff, Phase 2 will introduce public self-registration. Opening a self-hosted server directly to the public internet invites DDoS attacks and vulnerability scanning. Furthermore, for Phase 1, we need a secure way to authenticate the 20 known users without building complex password management systems into the application itself.
 
 **The Architecture Choice:**
-Treat the database purely as an attached resource accessible via a standardized URI. The application code must remain entirely ignorant of *where* the database lives, relying solely on environment injection (Environment Variables) to locate its state. The database will bind only to a private internal network interface for security.
+We place the application behind **Cloudflare**.
+- **The Primary Benefit (WAF):** Cloudflare acts as a Web Application Firewall (WAF) and DDoS shield. When public registration launches, Cloudflare absorbs malicious traffic, ensuring the self-hosted server only handles legitimate requests.
+- **Phase 1 Authentication (Zero Trust):** We use Cloudflare Tunnels to connect our server to the internet invisibly, meaning we do not have to open any inbound ports on our office routers. We configure Cloudflare to use Email OTP (One-Time Password) restricted to a hardcoded list of the 20 allowed staff emails. This requires zero code and saves massive development time.
+- **Phase 2 Authentication (Centralized SSO):** In the future, we can transition away from Cloudflare OTP to a centralized organization-wide SSO/Identity Provider to ensure login consistency across all company apps.
 
-**Current vs. Proposed State:**
-- **Current State:** The codebase currently assumes the database is running locally and likely has connection details hardcoded or loosely managed for local dev.
-- **Proposed State:** The application must read the connection string from an environment variable (e.g., `DATABASE_URL`). You will run a dedicated PostgreSQL instance on a secure, private network, and inject that specific URL into the backend container.
+---
+
+## 7. Database Backup & Recovery Strategy
+
+> **TL;DR:** We are starting with simple interval snapshots stored on a secondary in-house server, with clear upgrade paths to Cloud storage or Managed Databases as the system scales.
+
+**The Context & Motivation:**
+We need a reliable recovery strategy that protects the data entered by the 5-7 concurrent staff members without requiring a full-time database administrator. We are currently self-hosting but want to be cloud-ready.
+
+**The Architecture Choice:**
+We are taking a phased maturity approach to database backups:
+
+1. **Current Strategy (Phase 1): In-House Server Redundancy**
+   - An automated interval script (e.g., `pg_dump` every 3 hours) takes a snapshot of the database and copies it to a physically separate server within the same office network.
+   - *Pros:* Easy to configure, zero ongoing cloud costs.
+   - *Cons:* Vulnerable to site-wide disasters (fire, power surge) and potential data loss of up to 3 hours.
+
+2. **Better Alternatives (Future Enhancements):**
+   - **Off-Site Cloud Backup:** Sending the 3-hour dumps to a secure cloud bucket (like AWS S3) instead of a local server to protect against site-wide disasters.
+   - **Continuous WAL Archiving:** Streaming Write-Ahead Logs to achieve Point-in-Time Recovery (PITR), reducing potential data loss from 3 hours to 0 minutes.
+   - **Managed Cloud Database (e.g., AWS RDS):** Moving the database to a cloud provider that automatically handles hardware maintenance, OS patching, and instantaneous backups. Because the application reads the database location from an environment variable (`DATABASE_URL`), this migration will require zero code changes.

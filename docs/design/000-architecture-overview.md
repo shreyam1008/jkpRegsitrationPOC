@@ -14,14 +14,22 @@ User's Browser (React App)
        │ (1) HTTPS Request (to registration.yourorg.org)
        ▼
 ┌────────────────────────────────────────────────────────┐
-│ Edge Web Server (Caddy / Nginx)                        │
+│ Cloudflare (WAF & Zero Trust Tunnel)                   │
 │ - Port 443 (HTTPS)                                     │
-│ - Terminates TLS (Encryption)                          │
+│ - Absorbs malicious bots / DDoS                        │
+│ - Enforces Email OTP login for staff                   │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           │ (2) Secure Internal Tunnel (No open router ports)
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│ Edge Web Server (Caddy / Nginx)                        │
+│ - Port 443 (HTTPS Termination)                         │
 │ - Serves static React files for `/`                    │
 │ - Routes `/grpc/` traffic to the proxy                 │
 └──────────────────────────┬─────────────────────────────┘
                            │
-                           │ (2) grpc-web Request (Internal HTTP/1.1)
+                           │ (3) grpc-web Request (Internal HTTP/1.1)
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │ grpc-web Proxy (FastAPI Container)                     │
@@ -29,7 +37,7 @@ User's Browser (React App)
 │ - Translates browser HTTP/1.1 frames to native gRPC    │
 └──────────────────────────┬─────────────────────────────┘
                            │
-                           │ (3) Native gRPC (Internal HTTP/2 + Protobuf)
+                           │ (4) Native gRPC (Internal HTTP/2 + Protobuf)
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │ Backend gRPC Server (Python/grpcio Container)          │
@@ -38,12 +46,13 @@ User's Browser (React App)
 │ - Validates data using Pydantic                        │
 └──────────────────────────┬─────────────────────────────┘
                            │
-                           │ (4) SQL via asyncpg/psycopg
+                           │ (5) SQL via asyncpg/psycopg
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │ Database (PostgreSQL Container / Managed DB)           │
 │ - Port 5432 (Strictly Private)                         │
 │ - Persists Satsangi registration data                  │
+│ - Backed up every 3 hours to secondary server          │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -51,11 +60,12 @@ User's Browser (React App)
 
 When a staff member registers a new Satsangi, the following workflow occurs:
 
-1. **The UI (React):** The staff member fills out the form. The React app creates a strongly-typed `SatsangiCreate` object and calls the generated gRPC client.
-2. **The Gateway (Edge Web Server):** The request hits the Edge Web Server. Because the React app and the API share the same domain (`registration.yourorg.org`), the browser sends the request cleanly without triggering complex CORS security blocks. The Edge server sees the `/grpc/` path and forwards it internally.
-3. **The Translator (grpc-web Proxy):** Browsers can't speak native gRPC. The proxy catches the `grpc-web` formatted request, strips away the browser-specific wrappers, and extracts the raw, highly-compressed binary protobuf payload.
-4. **The Brain (Backend gRPC Server):** The native gRPC server receives the binary payload. It instantly deserializes it into a Python object with guaranteed type safety. It applies business rules and commits the data to PostgreSQL.
-5. **The Return Trip:** The database confirms the write. The backend serializes the new `Satsangi` object back to binary. The proxy wraps it in a browser-friendly `grpc-web` frame. The Edge server passes it back through the secure HTTPS tunnel to the React app, which instantly updates the UI.
+1. **The Shield (Cloudflare):** The staff member accesses the URL. Cloudflare intercepts the request, verifies their Email OTP, and securely tunnels them to the office network.
+2. **The UI (React):** The staff member fills out the form. The React app creates a strongly-typed `SatsangiCreate` object and calls the generated gRPC client.
+3. **The Gateway (Edge Web Server):** The request hits the Edge Web Server. Because the React app and the API share the same domain (`registration.yourorg.org`), the browser sends the request cleanly without triggering complex CORS security blocks. The Edge server sees the `/grpc/` path and forwards it internally.
+4. **The Translator (grpc-web Proxy):** Browsers can't speak native gRPC. The proxy catches the `grpc-web` formatted request, strips away the browser-specific wrappers, and extracts the raw, highly-compressed binary protobuf payload.
+5. **The Brain (Backend gRPC Server):** The native gRPC server receives the binary payload. It instantly deserializes it into a Python object with guaranteed type safety. It applies business rules and commits the data to PostgreSQL.
+6. **The Return Trip:** The database confirms the write. The backend serializes the new `Satsangi` object back to binary. The proxy wraps it in a browser-friendly `grpc-web` frame. The Edge server passes it back through the secure HTTPS tunnel to the React app, which instantly updates the UI.
 
 ## Why This Architecture Wins
 
