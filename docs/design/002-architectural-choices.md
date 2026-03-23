@@ -71,37 +71,51 @@ The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web 
 
 ---
 
-## 5. Cloudflare Integration (Public Readiness & WAF)
+## 5. Self-Hosted PostgreSQL (with Cloud-Ready Path)
 
-> **TL;DR:** We integrate Cloudflare primarily to support future public self-registration by providing a massive shield (Web Application Firewall) against bots and malicious traffic, while keeping our internal server secure. In Phase 1, it provides simple Email OTP for our 20 users.
+> **TL;DR:** We self-host the database for data privacy, but we inject the connection string via Environment Variables so we can move to AWS/Cloud later without changing any Python code.
 
 **The Context & Motivation:**
-While Phase 1 only serves ~20 internal staff, Phase 2 will introduce public self-registration. Opening a self-hosted server directly to the public internet invites DDoS attacks and vulnerability scanning. Furthermore, for Phase 1, we need a secure way to authenticate the 20 known users without building complex password management systems into the application itself.
+Data sensitivity mandates strict local custody (self-hosting). However, hardcoding local infrastructure details creates a brittle system that cannot easily migrate to a managed public cloud later when security postures or scale requires it.
 
 **The Architecture Choice:**
-We place the application behind **Cloudflare**.
-- **The Primary Benefit (WAF):** Cloudflare acts as a Web Application Firewall (WAF) and DDoS shield. When public registration launches, Cloudflare absorbs malicious traffic, ensuring the self-hosted server only handles legitimate requests.
-- **Phase 1 Authentication (Zero Trust):** We use Cloudflare Tunnels to connect our server to the internet invisibly, meaning we do not have to open any inbound ports on our office routers. We configure Cloudflare to use Email OTP (One-Time Password) restricted to a hardcoded list of the 20 allowed staff emails. This requires zero code and saves massive development time.
-- **Phase 2 Authentication (Centralized SSO):** In the future, we can transition away from Cloudflare OTP to a centralized organization-wide SSO/Identity Provider to ensure login consistency across all company apps.
+Treat the database purely as an attached resource accessible via a standardized URI. The application code must remain entirely ignorant of *where* the database lives, relying solely on environment injection (Environment Variables) to locate its state. The database will bind only to a private internal network interface for security.
+
+**Current vs. Proposed State:**
+- **Current State:** The codebase currently assumes the database is running locally and likely has connection details hardcoded or loosely managed for local dev.
+- **Proposed State:** The application must read the connection string from an environment variable (e.g., `DATABASE_URL`). You will run a dedicated PostgreSQL instance on a secure, private network, and inject that specific URL into the backend container.
 
 ---
 
-## 6. Database Backup & Recovery Strategy
+## 6. Authentication (Self-Hosted Identity Provider)
 
-> **TL;DR:** We are starting with simple interval snapshots stored on a secondary in-house server, with clear upgrade paths to Cloud storage or Managed Databases as the system scales.
+> **TL;DR:** To securely authenticate the 100-200 staff members without writing a custom, potentially insecure login system, we will deploy a self-hosted open-source identity provider (like SuperTokens or Logto) strictly for this application in Phase 1.
 
 **The Context & Motivation:**
-We need a reliable recovery strategy that protects the data entered by the 5-7 concurrent staff members without requiring a full-time database administrator. We are currently self-hosting but want to be cloud-ready.
+Building custom authentication (password hashing, session cookies, password resets) from scratch is a significant security risk and time sink. We need a secure way to manage our 100-200 users. While we eventually want a centralized SSO for all company apps, we are scoping this strictly to this application for Phase 1.
+
+**The Architecture Choice:**
+We will deploy **SuperTokens** (or Logto) in a Docker container alongside our application.
+- **Why it makes sense:** It keeps all user data strictly within our internal network, avoids public cloud dependencies, and removes the burden of maintaining custom login code. When the organization is ready, this instance can be scaled into a centralized Identity Provider.
+- **Future Public Registration:** For Phase 2 (public self-registration), we plan to use a Firebase OTP mechanism. This allows end-users to verify their identity via SMS without needing a persistent account or password, while avoiding hard dependencies on Cloudflare.
+
+---
+
+## 7. Database Backup & Recovery Strategy
+
+> **TL;DR:** We utilize automated interval backups to a secondary in-house server, with continuous Write-Ahead Log (WAL) archiving as a secondary "nice-to-have" goal.
+
+**The Context & Motivation:**
+We need a reliable recovery strategy that protects the data entered by 50-60 concurrent staff members. We are currently self-hosting but want to ensure we don't lose days of work if a primary server fails.
 
 **The Architecture Choice:**
 We are taking a phased maturity approach to database backups:
 
-1. **Current Strategy (Phase 1): In-House Server Redundancy**
-   - An automated interval script (e.g., `pg_dump` every 3 hours) takes a snapshot of the database and copies it to a physically separate server within the same office network.
-   - *Pros:* Easy to configure, zero ongoing cloud costs.
-   - *Cons:* Vulnerable to site-wide disasters (fire, power surge) and potential data loss of up to 3 hours.
+1. **Current Strategy (Phase 1): In-House Automated Backups**
+   - **Primary Goal:** Automated scheduled snapshots (e.g., `pg_dump` every few hours) securely copied to a physically separate in-house server.
+   - **Secondary Goal (Nice-to-Have):** Streaming continuous Write-Ahead Logs (WAL) to the secondary server to achieve Point-in-Time Recovery (PITR) and reduce potential data loss to near-zero.
+   - *Pros:* Zero ongoing cloud costs and protects against single-machine failure.
 
 2. **Better Alternatives (Future Enhancements):**
-   - **Off-Site Cloud Backup:** Sending the 3-hour dumps to a secure cloud bucket (like AWS S3) instead of a local server to protect against site-wide disasters.
-   - **Continuous WAL Archiving:** Streaming Write-Ahead Logs to achieve Point-in-Time Recovery (PITR), reducing potential data loss from 3 hours to 0 minutes.
+   - **Off-Site Cloud Backup:** Sending the backups to a secure cloud bucket (like AWS S3) instead of a local server to protect against site-wide disasters.
    - **Managed Cloud Database (e.g., AWS RDS):** Moving the database to a cloud provider that automatically handles hardware maintenance, OS patching, and instantaneous backups. Because the application reads the database location from an environment variable (`DATABASE_URL`), this migration will require zero code changes.
