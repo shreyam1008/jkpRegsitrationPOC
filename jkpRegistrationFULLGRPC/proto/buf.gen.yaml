@@ -1,0 +1,10 @@
+# TypeScript generation via buf remote plugin
+# Python generation uses grpcio-tools directly (version compatibility)
+# Run: ./proto/generate
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/bufbuild/es
+    out: ../client/src/generated
+    opt: target=ts
+    include_imports: true

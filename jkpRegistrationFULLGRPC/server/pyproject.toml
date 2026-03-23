@@ -4,12 +4,10 @@ version = "0.1.0"
 description = "JKP Satsangi Registration POC - Full gRPC + PostgreSQL Backend"
 requires-python = ">=3.12"
 dependencies = [
-    "grpcio>=1.68.0",
-    "grpcio-tools>=1.68.0",
-    "grpcio-reflection>=1.68.0",
-    "protobuf>=5.29.0",
+    "grpcio==1.78.0",
+    "grpcio-reflection==1.78.0",
+    "protobuf==6.33.6",
     "pydantic==2.12.5",
-    "ruff==0.15.5",
     "fastapi==0.135.1",
     "uvicorn==0.41.0",
     "psycopg2-binary>=2.9.9",
@@ -26,3 +24,15 @@ select = ["E", "F", "I", "UP"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+
+# Run tasks with: uv run task <task_name>
+# Example: uv run task dev
+[tool.taskipy.tasks]
+dev = "uvicorn app.main:app --port 8080"
+
+[dependency-groups]
+dev = [
+    "grpcio-tools==1.78.0",
+    "ruff==0.15.5",
+    "taskipy>=1.14.1",
+]

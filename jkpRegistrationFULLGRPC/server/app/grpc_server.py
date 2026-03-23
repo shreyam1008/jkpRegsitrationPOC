@@ -105,7 +105,8 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
 
     def ListSatsangis(self, request, context):
         try:
-            results = store.get_all_satsangis()
+            limit = request.limit if request.limit > 0 else 0
+            results = store.get_all_satsangis(limit=limit)
             return satsangi_pb2.SatsangiList(
                 satsangis=[_model_to_proto(s) for s in results]
             )
@@ -115,17 +116,14 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
             context.set_details(str(e))
             return satsangi_pb2.SatsangiList()
 
-    def StreamSearchResults(self, request, context):
-        """Server-streaming RPC: yields one Satsangi at a time."""
-        try:
-            results = store.search_satsangis(request.query)
-            for s in results:
-                yield _model_to_proto(s)
-        except Exception as e:
-            logger.exception("StreamSearchResults failed")
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-
+    def Health(self, request, context):
+        from datetime import datetime
+        return satsangi_pb2.HealthResponse(
+            status="healthy",
+            timestamp=datetime.now().isoformat(),
+            message="Service is running",
+            db_status="connected",
+        )
 
 def serve(port: int = 50051, max_workers: int = 10) -> grpc.Server:
     """Create, configure, and start the gRPC server."""

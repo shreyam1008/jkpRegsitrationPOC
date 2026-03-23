@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { searchSatsangis, type Satsangi } from '../api'
+import { searchSatsangis, listSatsangis, type Satsangi } from '../api'
 import { clsx } from 'clsx'
 import {
   Search, UserPlus, AlertCircle, Users, Phone, Mail, MapPin, Calendar,
@@ -18,7 +18,10 @@ export default function SearchPage() {
       setLoading(true)
       setError('')
       try {
-        setResults(await searchSatsangis(query))
+        const data = query.trim()
+          ? await searchSatsangis(query)
+          : await listSatsangis(50)
+        setResults(data)
       } catch {
         setResults([])
         setError('Failed to fetch results. Is the server running?')
@@ -122,7 +125,7 @@ export default function SearchPage() {
       {/* Results */}
       <div className="space-y-3">
         {results.map((s) => (
-          <SatsangiCard key={s.satsangi_id} s={s} />
+          <SatsangiCard key={s.satsangiId} s={s} />
         ))}
       </div>
     </div>
@@ -130,8 +133,8 @@ export default function SearchPage() {
 }
 
 function SatsangiCard({ s }: { s: Satsangi }) {
-  const initials = `${s.first_name[0]}${s.last_name[0]}`.toUpperCase()
-  const fullName = `${s.first_name} ${s.last_name}`
+  const initials = `${s.firstName[0]}${s.lastName[0]}`.toUpperCase()
+  const fullName = `${s.firstName} ${s.lastName}`
 
   return (
     <div className={clsx(
@@ -155,7 +158,7 @@ function SatsangiCard({ s }: { s: Satsangi }) {
           <div className="flex items-center justify-between gap-3">
             <h3 className="truncate text-[15px] font-semibold text-gray-900">{fullName}</h3>
             <span className="shrink-0 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-mono font-semibold text-brand-600 border border-brand-100">
-              {s.satsangi_id}
+              {s.satsangiId}
             </span>
           </div>
 
@@ -163,7 +166,7 @@ function SatsangiCard({ s }: { s: Satsangi }) {
           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <Phone className="h-3 w-3" />
-              {s.phone_number}
+              {s.phoneNumber}
             </span>
             {s.email && (
               <span className="flex items-center gap-1">
@@ -179,24 +182,24 @@ function SatsangiCard({ s }: { s: Satsangi }) {
             )}
             {s.gender && <span>{s.gender}</span>}
             {s.age && <span>Age {s.age}</span>}
-            {s.created_at && (
+            {s.createdAt && (
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {new Date(s.created_at).toLocaleDateString()}
+                {new Date(s.createdAt).toLocaleDateString()}
               </span>
             )}
           </div>
 
           {/* Tags */}
-          {(s.govt_id_type || s.nick_name || s.introduced_by || s.first_timer || s.banned || s.has_room_in_ashram) && (
+          {(s.govtIdType || s.nickName || s.introducedBy || s.firstTimer || s.banned || s.hasRoomInAshram) && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {s.govt_id_type && (
-                <Tag>{s.govt_id_type}: {s.govt_id_number}</Tag>
+              {s.govtIdType && (
+                <Tag>{s.govtIdType}: {s.govtIdNumber}</Tag>
               )}
-              {s.nick_name && <Tag>Nick: {s.nick_name}</Tag>}
-              {s.introduced_by && <Tag>Via {s.introduced_by}</Tag>}
-              {s.first_timer && <Tag color="blue">First Timer</Tag>}
-              {s.has_room_in_ashram && <Tag color="green">Has Room</Tag>}
+              {s.nickName && <Tag>Nick: {s.nickName}</Tag>}
+              {s.introducedBy && <Tag>Via {s.introducedBy}</Tag>}
+              {s.firstTimer && <Tag color="blue">First Timer</Tag>}
+              {s.hasRoomInAshram && <Tag color="green">Has Room</Tag>}
               {s.banned && <Tag color="red">Banned</Tag>}
             </div>
           )}

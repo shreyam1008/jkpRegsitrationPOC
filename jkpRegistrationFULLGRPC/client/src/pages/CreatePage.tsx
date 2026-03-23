@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { createSatsangi, type SatsangiCreate } from '../api'
+import { createSatsangi } from '../api'
+import type { SatsangiCreate } from '../api'
 import CollapsibleSection from '../components/ui/CollapsibleSection'
 import FormInput from '../components/ui/FormInput'
 import FormSelect from '../components/ui/FormSelect'
@@ -59,43 +60,43 @@ export default function CreatePage() {
     }
 
     const ageRaw = str('age')
-    const payload: SatsangiCreate = {
-      first_name: first_name!,
-      last_name: last_name!,
-      phone_number: phone_number!,
-      age: ageRaw ? parseInt(ageRaw, 10) : null,
-      date_of_birth: str('date_of_birth'),
-      pan: str('pan'),
-      gender: str('gender'),
-      special_category: str('special_category'),
+    const payload: Partial<SatsangiCreate> = {
+      firstName: first_name!,
+      lastName: last_name!,
+      phoneNumber: phone_number!,
+      age: ageRaw ? parseInt(ageRaw, 10) : undefined,
+      dateOfBirth: str('date_of_birth') ?? undefined,
+      pan: str('pan') ?? undefined,
+      gender: str('gender') ?? undefined,
+      specialCategory: str('special_category') ?? undefined,
       nationality: str('nationality') ?? 'Indian',
-      govt_id_type: str('govt_id_type'),
-      govt_id_number: str('govt_id_number'),
-      id_expiry_date: str('id_expiry_date'),
-      id_issuing_country: str('id_issuing_country'),
-      nick_name: str('nick_name'),
-      print_on_card: fd.get('print_on_card') === 'on',
-      introducer: str('introducer'),
+      govtIdType: str('govt_id_type') ?? undefined,
+      govtIdNumber: str('govt_id_number') ?? undefined,
+      idExpiryDate: str('id_expiry_date') ?? undefined,
+      idIssuingCountry: str('id_issuing_country') ?? undefined,
+      nickName: str('nick_name') ?? undefined,
+      printOnCard: fd.get('print_on_card') === 'on',
+      introducer: str('introducer') ?? undefined,
       country: str('country') ?? 'India',
-      address: str('address'),
-      city: str('city'),
-      district: str('district'),
-      state: str('state'),
-      pincode: str('pincode'),
-      emergency_contact: str('emergency_contact'),
-      ex_center_satsangi_id: str('ex_center_satsangi_id'),
-      introduced_by: str('introduced_by'),
-      has_room_in_ashram: fd.get('has_room_in_ashram') === 'on',
-      email: str('email'),
+      address: str('address') ?? undefined,
+      city: str('city') ?? undefined,
+      district: str('district') ?? undefined,
+      state: str('state') ?? undefined,
+      pincode: str('pincode') ?? undefined,
+      emergencyContact: str('emergency_contact') ?? undefined,
+      exCenterSatsangiId: str('ex_center_satsangi_id') ?? undefined,
+      introducedBy: str('introduced_by') ?? undefined,
+      hasRoomInAshram: fd.get('has_room_in_ashram') === 'on',
+      email: str('email') ?? undefined,
       banned: fd.get('banned') === 'on',
-      first_timer: fd.get('first_timer') === 'on',
-      date_of_first_visit: str('date_of_first_visit'),
-      notes: str('notes'),
+      firstTimer: fd.get('first_timer') === 'on',
+      dateOfFirstVisit: str('date_of_first_visit') ?? undefined,
+      notes: str('notes') ?? undefined,
     }
 
     try {
       const created = await createSatsangi(payload)
-      setSuccess(`Registered! Satsangi ID: ${created.satsangi_id}`)
+      setSuccess(`Registered! Satsangi ID: ${created.satsangiId}`)
       formRef.current?.reset()
     } catch {
       setError('Failed to register. Please check your details and try again.')

@@ -148,6 +148,12 @@ class SearchRequest(_message.Message):
     query: str
     def __init__(self, query: _Optional[str] = ...) -> None: ...
 
+class ListRequest(_message.Message):
+    __slots__ = ("limit",)
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    limit: int
+    def __init__(self, limit: _Optional[int] = ...) -> None: ...
+
 class SatsangiList(_message.Message):
     __slots__ = ("satsangis",)
     SATSANGIS_FIELD_NUMBER: _ClassVar[int]
@@ -157,3 +163,19 @@ class SatsangiList(_message.Message):
 class Empty(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
+
+class HealthRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class HealthResponse(_message.Message):
+    __slots__ = ("status", "timestamp", "message", "db_status")
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    DB_STATUS_FIELD_NUMBER: _ClassVar[int]
+    status: str
+    timestamp: str
+    message: str
+    db_status: str
+    def __init__(self, status: _Optional[str] = ..., timestamp: _Optional[str] = ..., message: _Optional[str] = ..., db_status: _Optional[str] = ...) -> None: ...

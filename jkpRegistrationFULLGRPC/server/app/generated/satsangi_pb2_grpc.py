@@ -26,7 +26,9 @@ if _version_not_supported:
 
 
 class SatsangiServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
+    """─── Service ───
+
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -46,18 +48,20 @@ class SatsangiServiceStub(object):
                 _registered_method=True)
         self.ListSatsangis = channel.unary_unary(
                 '/jkp.registration.v1.SatsangiService/ListSatsangis',
-                request_serializer=satsangi__pb2.Empty.SerializeToString,
+                request_serializer=satsangi__pb2.ListRequest.SerializeToString,
                 response_deserializer=satsangi__pb2.SatsangiList.FromString,
                 _registered_method=True)
-        self.StreamSearchResults = channel.unary_stream(
-                '/jkp.registration.v1.SatsangiService/StreamSearchResults',
-                request_serializer=satsangi__pb2.SearchRequest.SerializeToString,
-                response_deserializer=satsangi__pb2.Satsangi.FromString,
+        self.Health = channel.unary_unary(
+                '/jkp.registration.v1.SatsangiService/Health',
+                request_serializer=satsangi__pb2.HealthRequest.SerializeToString,
+                response_deserializer=satsangi__pb2.HealthResponse.FromString,
                 _registered_method=True)
 
 
 class SatsangiServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
+    """─── Service ───
+
+    """
 
     def CreateSatsangi(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -77,7 +81,7 @@ class SatsangiServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def StreamSearchResults(self, request, context):
+    def Health(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -98,13 +102,13 @@ def add_SatsangiServiceServicer_to_server(servicer, server):
             ),
             'ListSatsangis': grpc.unary_unary_rpc_method_handler(
                     servicer.ListSatsangis,
-                    request_deserializer=satsangi__pb2.Empty.FromString,
+                    request_deserializer=satsangi__pb2.ListRequest.FromString,
                     response_serializer=satsangi__pb2.SatsangiList.SerializeToString,
             ),
-            'StreamSearchResults': grpc.unary_stream_rpc_method_handler(
-                    servicer.StreamSearchResults,
-                    request_deserializer=satsangi__pb2.SearchRequest.FromString,
-                    response_serializer=satsangi__pb2.Satsangi.SerializeToString,
+            'Health': grpc.unary_unary_rpc_method_handler(
+                    servicer.Health,
+                    request_deserializer=satsangi__pb2.HealthRequest.FromString,
+                    response_serializer=satsangi__pb2.HealthResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -115,7 +119,9 @@ def add_SatsangiServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class SatsangiService(object):
-    """Missing associated documentation comment in .proto file."""
+    """─── Service ───
+
+    """
 
     @staticmethod
     def CreateSatsangi(request,
@@ -186,7 +192,7 @@ class SatsangiService(object):
             request,
             target,
             '/jkp.registration.v1.SatsangiService/ListSatsangis',
-            satsangi__pb2.Empty.SerializeToString,
+            satsangi__pb2.ListRequest.SerializeToString,
             satsangi__pb2.SatsangiList.FromString,
             options,
             channel_credentials,
@@ -199,7 +205,7 @@ class SatsangiService(object):
             _registered_method=True)
 
     @staticmethod
-    def StreamSearchResults(request,
+    def Health(request,
             target,
             options=(),
             channel_credentials=None,
@@ -209,12 +215,12 @@ class SatsangiService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(
+        return grpc.experimental.unary_unary(
             request,
             target,
-            '/jkp.registration.v1.SatsangiService/StreamSearchResults',
-            satsangi__pb2.SearchRequest.SerializeToString,
-            satsangi__pb2.Satsangi.FromString,
+            '/jkp.registration.v1.SatsangiService/Health',
+            satsangi__pb2.HealthRequest.SerializeToString,
+            satsangi__pb2.HealthResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package jkp.registration.v1;
 
+// ─── Messages ───
+
 message SatsangiCreate {
   string first_name           = 1;
   string last_name            = 2;
@@ -76,15 +78,30 @@ message SearchRequest {
   string query = 1;
 }
 
+message ListRequest {
+  int32 limit = 1;
+}
+
 message SatsangiList {
   repeated Satsangi satsangis = 1;
 }
 
 message Empty {}
 
+// HeathCheck Message
+message HealthRequest{}
+message HealthResponse{
+  string status = 1;
+  string timestamp = 2;
+  string message = 3;
+  string db_status = 4;
+}
+
+// ─── Service ───
+
 service SatsangiService {
   rpc CreateSatsangi(SatsangiCreate) returns (Satsangi);
   rpc SearchSatsangis(SearchRequest) returns (SatsangiList);
-  rpc ListSatsangis(Empty) returns (SatsangiList);
-  rpc StreamSearchResults(SearchRequest) returns (stream Satsangi);
+  rpc ListSatsangis(ListRequest) returns (SatsangiList);
+  rpc Health(HealthRequest) returns (HealthResponse);
 }

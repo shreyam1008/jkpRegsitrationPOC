@@ -91,14 +91,15 @@ def search_satsangis(query: str) -> list[Satsangi]:
         conn.close()
 
 
-def get_all_satsangis() -> list[Satsangi]:
-    """Return all satsangis, newest first."""
+def get_all_satsangis(limit: int = 0) -> list[Satsangi]:
+    """Return satsangis, newest first. If limit > 0, return only that many."""
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                f"SELECT {', '.join(_ALL_FIELDS)} FROM satsangis ORDER BY created_at DESC"
-            )
+            sql = f"SELECT {', '.join(_ALL_FIELDS)} FROM satsangis ORDER BY created_at DESC"
+            if limit > 0:
+                sql += f" LIMIT {int(limit)}"
+            cur.execute(sql)
             rows = cur.fetchall()
         return [_row_to_satsangi(row) for row in rows]
     finally:

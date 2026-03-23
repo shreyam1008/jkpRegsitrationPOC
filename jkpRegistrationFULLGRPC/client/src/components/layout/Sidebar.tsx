@@ -3,7 +3,8 @@ import { clsx } from 'clsx'
 import {
   Search, UserPlus, X, Menu, Server, Database,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { healthCheck } from '../../api'
 
 const NAV_ITEMS = [
   { to: '/search', label: 'Search', icon: Search },
@@ -13,6 +14,25 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
+  const [health, setHealth] = useState<{ status: string; dbStatus: string; timestamp: string } | null>(null)
+  const [healthy, setHealthy] = useState(false)
+
+  const checkHealth = useCallback(async () => {
+    try {
+      const resp = await healthCheck()
+      setHealth({ status: resp.status, dbStatus: resp.dbStatus, timestamp: resp.timestamp })
+      setHealthy(true)
+    } catch {
+      setHealth(null)
+      setHealthy(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    checkHealth()
+    const id = setInterval(checkHealth, 10_000)
+    return () => clearInterval(id)
+  }, [checkHealth])
 
   useEffect(() => {
     setOpen(false)
@@ -61,20 +81,25 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Status */}
+        {/* Status — live from Health RPC */}
         <div className="px-5 py-3 border-b border-gray-100">
           <div className="flex items-center gap-4 text-[11px]">
             <span className="flex items-center gap-1.5 text-gray-400">
               <Server className="h-3 w-3" />
               gRPC
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className={clsx('h-1.5 w-1.5 rounded-full', healthy ? 'bg-green-400 animate-pulse' : 'bg-red-400')} />
             </span>
             <span className="flex items-center gap-1.5 text-gray-400">
               <Database className="h-3 w-3" />
               PostgreSQL
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className={clsx('h-1.5 w-1.5 rounded-full', healthy && health?.dbStatus === 'connected' ? 'bg-green-400 animate-pulse' : 'bg-red-400')} />
             </span>
           </div>
+          {health && (
+            <p className="mt-1.5 text-[10px] text-gray-300 truncate" title={health.timestamp}>
+              {health.status} · {new Date(health.timestamp).toLocaleTimeString()}
+            </p>
+          )}
         </div>
 
         {/* Nav */}
