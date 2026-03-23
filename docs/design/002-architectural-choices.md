@@ -140,14 +140,14 @@ We mandate a **Site-to-Site VPN**.
 
 ## 10. File Storage (MinIO vs Local Hard Disk)
 
-> **TL;DR:** We will use **MinIO** (a self-hosted S3-compatible object storage) to manage the massive media files instead of raw local disk folders or database blobs.
+> **TL;DR:** We will use **MinIO** (a self-hosted S3-compatible object storage) to manage media files (Photos, ID Proofs, Form C docs) instead of raw local disk folders or database blobs, keeping total storage strictly under 200GB.
 
 **The Context & Motivation:**
-With scaling expectations up to 500,000 registrations, we must manage massive amounts of media data. If each user uploads 2 photos (profile + ID proof) at ~1MB each, we are looking at 1TB of media. 
+With scaling expectations up to 500,000 registrations, we must efficiently manage media data. This includes standard registrations and specialized Form C documents for foreign nationals. We are implementing hard caps to ensure total media storage does not exceed 200GB.
 
 We considered two local-storage approaches:
-1. **Raw Local Hard Disk (Docker Volumes):** The Python API receives the 1MB file via gRPC (or REST) and saves it to a folder like `/var/app/data/photos/`. 
-   - *Problem:* Passing 1TB of binary files through the gRPC translation proxy adds massive overhead to the Python server. Additionally, creating raw network copies of 1,000,000 individual tiny files using `rsync` for backups takes hours and causes disk I/O bottlenecks.
+1. **Raw Local Hard Disk (Docker Volumes):** The Python API receives the files via gRPC (or REST) and saves them to a folder like `/var/app/data/photos/`. 
+   - *Problem:* Passing binary files through the gRPC translation proxy adds massive overhead to the Python server. Additionally, creating raw network copies of hundreds of thousands of individual tiny files using `rsync` for backups takes hours and causes disk I/O bottlenecks.
 2. **MinIO Object Storage:** A dedicated container running on the local server that manages files like an enterprise database instead of a raw folder.
 
 **The Architecture Choice:**
@@ -212,4 +212,4 @@ We will use a **Two-Server Topology** for the live environment.
 **The Architecture Choice (Staging/Test Server):**
 We will maintain a **Dedicated Staging Server** (a smaller, single remote server) running alongside production on the VPN. 
 - **Purpose:** All Docker images built by GitHub Actions will be manually pulled and deployed to this staging server first. It allows developers and project leads to click through the new UI and verify migrations *before* touching the Split Node production servers.
-- **Topology:** This staging environment will run the entire stack (Compute + Database + MinIO) on a single machine via a unified `docker-compose-staging.yml` file to save costs.
+- **Topology & Backups:** This staging environment will run the entire stack (Compute + Database + MinIO) on a single machine via a unified `docker-compose-staging.yml` file to save costs. **The staging server will explicitly NOT be backed up**, as it only holds synthetic/temporary test data.

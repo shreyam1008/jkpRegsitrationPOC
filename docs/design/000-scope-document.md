@@ -4,7 +4,7 @@ This document outlines the scope, target audience, and feature boundaries for th
 
 ## Target Audience & Scale
 - **Staff Users:** 100-200 designated staff members (50-60 concurrent active users).
-- **Data Scale:** Expected to scale up to 500,000 (5 Lakh) registration entries (Satsangis). This includes ~200,000 legacy entries to be migrated immediately, accompanied by massive media data (~400GB+ to 1TB of profile photos and ID proofs).
+- **Data Scale:** Expected to scale up to 500,000 (5 Lakh) registration entries (Satsangis). This includes ~100,000 legacy entries to be migrated immediately. Media data (profile photos, ID proofs, Form C docs) is expected to be around 500GB.
 - **Geography:** Distributed across 4-5 different geographical locations within India.
 - **Primary Use Case:** Web-based data entry, rapid retrieval, and legacy data management.
 
@@ -14,6 +14,7 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 **In-Scope:**
 - Responsive Web Application (React) accessible via PC and Mobile browsers.
 - Multi-step registration workflow for new Satsangis.
+- Form C data capture and document storage specifically for the registration of foreign nationals.
 - Application-specific authentication using a self-hosted identity provider (SuperTokens or Logto).
 - Secure internal access via Site-to-Site VPN across all offices, utilizing an Internal DNS (e.g., `registration.jkp.internal`) to map domain names without public internet exposure.
 - Two-Server Split Topology: A stateless Compute Server (App/Proxy) and a Stateful Server (PostgreSQL/MinIO).
