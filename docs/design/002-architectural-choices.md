@@ -78,7 +78,7 @@ The browser trusts the origin exactly. By placing a reverse proxy (an "Edge Web 
 **The Context & Motivation:**
 Data sensitivity mandates strict local custody (self-hosting). However, hardcoding local infrastructure details creates a brittle system that cannot easily migrate to a managed public cloud later when security postures or scale requires it.
 
-**The Architecture Choice:**
+**The Architecture Choice:**\
 Treat the database purely as an attached resource accessible via a standardized URI. The application code must remain entirely ignorant of *where* the database lives, relying solely on environment injection (Environment Variables) to locate its state. The database will bind only to a private internal network interface for security.
 
 **Current vs. Proposed State:**
@@ -138,15 +138,67 @@ We mandate a **Site-to-Site VPN**.
 
 ---
 
-## 9. Cloud Readiness (Twelve-Factor App)
+## 10. File Storage (Photos & ID Proofs)
 
-> **TL;DR:** Although the system is designed to be self-hosted on an internal network, its architecture is "Cloud-Native", meaning it can be migrated to AWS/GCP tomorrow with zero code changes.
+> **TL;DR:** We will use a self-hosted S3-compatible object storage (like MinIO) to store the ID proofs and photos for the 100k-200k Satsangis, rather than polluting the PostgreSQL database with binary blobs.
 
 **The Context & Motivation:**
-Many self-hosted applications become brittle over time because developers hardcode local file paths, assume local database presence, or rely on state stored directly on the server's hard drive. This makes future cloud migration painful.
+With 1-2 Lakh (100k-200k) users, storing photos and scanned ID proofs directly inside a PostgreSQL database (`bytea` columns) will massively bloat the database size. This makes backups painfully slow and degrades database performance. Furthermore, gRPC is optimized for structured data, not streaming large binary files.
 
 **The Architecture Choice:**
-We enforce strict **Twelve-Factor App** principles to ensure true cloud readiness:
-1. **Containerization:** Every single component (UI, Proxy, Backend, Database) is isolated in its own Docker container. Cloud providers are built natively to run containers.
-2. **Stateless Compute:** The Python backend and FastAPI proxy do not store session data or files on their local drives. If the server is destroyed and restarted elsewhere, no data is lost.
-3. **Environment Parity:** The database connection (`DATABASE_URL`), auth secrets, and proxy endpoints are entirely decoupled from the code and injected via Environment Variables. Moving from a local server to AWS simply requires updating a `.env` file, with zero lines of Python or React code changed.
+We will deploy **MinIO** (a lightweight, open-source S3 alternative) via Docker alongside our database.
+- **Why it makes sense:** The React frontend will request a secure "Pre-signed URL" from the Python backend via gRPC. The frontend will then upload the photo *directly* to MinIO using standard HTTP. This keeps the heavy file traffic off our gRPC backend entirely.
+- **Backup Strategy:** The MinIO data volume will be backed up to the secondary in-house server using tools like `rsync` or `rclone`, running on a similar schedule as the database snapshots.
+
+---
+
+## 11. Database Migrations (Schema & Legacy Data)
+
+> **TL;DR:** We will evaluate specific schema migration tooling (like Alembic) when the need arises, but we will rely on dedicated Python scripts to handle the massive legacy data migration for Phase 1.
+
+**The Context & Motivation:**
+As the application evolves, we need a safe way to add/remove columns to the PostgreSQL database without breaking the app for the 50 concurrent staff users. Additionally, we must migrate 1-2 Lakh legacy user records from the old system into this new structured database.
+
+**The Architecture Choice:**
+- **Schema Evolution:** We are deferring the choice of a specific schema migration framework (like Alembic or Flyway) until the application requires its first structural update post-launch. For now, the schema will be defined via standard initialization scripts.
+- **Legacy Data Migration:** We will write a dedicated ETL (Extract, Transform, Load) Python script for the massive 100k+ row data migration. This script will read the old database/CSVs, validate the data using our strict Pydantic models, and bulk-insert it into the new PostgreSQL database before Phase 1 goes live.
+
+---
+
+## 12. CI/CD & Deployment Pipeline
+
+> **TL;DR:** We use a Hybrid Deployment model: GitHub Actions automatically builds the Docker images, but deployment to the VPN server is triggered manually by a developer choosing a specific stable build.
+
+**The Context & Motivation:**
+We want to avoid the "works on my machine" problem by ensuring all code is built in a clean, isolated environment. However, we do not want *Continuous Deployment* (where every push to `main` instantly goes live to staff). We need tight control over exactly when updates happen and the ability to test builds on a staging server first.
+
+**The Architecture Choice:**
+- **The Build (Automated):** When code is merged to `main`, GitHub Actions automatically compiles the React app, builds the Python backend, and pushes the Docker images to a private registry (like GitHub Container Registry).
+- **The Deploy (Manual):** An admin SSHs into the VPN server (Test or Production) and explicitly pulls the specific image tag they want to deploy (e.g., `docker compose pull && docker compose up -d`). This ensures we only roll out features when the organization is ready, preventing unexpected mid-day updates.
+
+---
+
+## 13. Logging & Monitoring (Docker + Sentry)
+
+> **TL;DR:** We use standard Docker logs for basic infrastructure health, and integrate the Sentry SDK into our code to automatically catch, alert, and trace application crashes.
+
+**The Context & Motivation:**
+If the app crashes for a user in another geography, the developers need to know exactly *what* broke and *where* without asking the user to read complex error codes.
+
+**The Architecture Choice:**
+- **Docker Logs (The Baseline):** Docker naturally captures anything `print()`ed to the console. This is useful for checking if the server actually started, but terrible for debugging deep code issues because logs lack stack traces and user context.
+- **Sentry (The Application Monitor):** We will embed the Sentry SDK into both the React frontend and the Python backend. If a user clicks a button and a null-pointer exception occurs, Sentry intercepts it before it crashes the app. It packages the exact line of code that failed, the user's browser details, and the gRPC payload into a neat alert sent to the developer team. It provides intelligent error tracking without the massive overhead of managing a custom Prometheus/Grafana stack.
+
+---
+
+## 14. Server Topology (Single Node vs Split Nodes)
+
+> **TL;DR:** For Phase 1, we will deploy everything (Proxy, Backend, PostgreSQL, MinIO, SuperTokens) on a **Single Powerful Server** using Docker Compose.
+
+**The Context & Motivation:**
+With 200k registrations, the database and file storage (MinIO) will consume significant disk space (~400GB+) and memory. The compute layer (Python/gRPC) is CPU-bound. Splitting these into multiple servers (e.g., Server A for Compute, Server B for Database, Server C for MinIO) increases fault tolerance but drastically increases operational complexity and network latency.
+
+**The Architecture Choice:**
+We will use a **Single Server Topology** for Phase 1.
+- **Why it makes sense:** Docker Compose natively handles networking between the containers instantly. If we split the database to a different physical server, we introduce network latency between the gRPC backend and the database, and we have to manage multiple Linux environments.
+- **The Caveat:** Because we are using a single server, the "Automated Scheduled Snapshots" and "MinIO syncs" to a *secondary in-house server* (as defined in our backup strategy) become absolutely critical to protect against a single-machine hardware failure. If the compute load becomes too high in Phase 2, we can easily split the stateless Docker containers (Python/Proxy) to a new server because they are decoupled via Environment Variables.
