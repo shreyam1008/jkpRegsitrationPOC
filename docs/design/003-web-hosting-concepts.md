@@ -76,18 +76,22 @@ A common point of confusion is what a domain name actually means for security.
 `localhost` is a special networking term that literally means "this exact computer right here." 
 If you run your app on `localhost:5174`, the only person in the entire world who can access it is you, sitting at that specific keyboard. It is perfectly secure, but useless for a team of 5-6 staff members.
 
-### What is a Domain?
-A domain name (like `registration.yourorg.org`) is simply a human-readable label that points to an IP Address. It is a phone book entry.
+## 4. Internal DNS & VPNs (How to have a Domain without the Public Internet)
 
-### Does having a Domain mean my app is on the public internet?
-**No.** This is a critical point.
+When moving away from `localhost`, many developers assume they must buy a public domain and expose their server to the internet. This is not true for internal applications.
 
-You can configure an "Internal DNS" (like a private company phone book). In this setup, if someone at home types `registration.yourorg.org`, it will fail. But if they are in the office building, or connected to the company VPN, the company's private router knows that `registration.yourorg.org` points to `192.168.1.50` (the IP address of your internal server).
+### VPN (Virtual Private Network)
+A Site-to-Site VPN connects multiple physical offices securely over the internet. To the computers inside those offices, it feels like they are plugged into the exact same local Wi-Fi router. The server is completely hidden from the outside world.
+
+### Internal DNS
+If you are on a VPN, how do staff type `https://registration.jkp.internal` instead of an ugly IP address like `192.168.1.50`?
+- You configure an **Internal DNS Server** (a private phone book).
+- Your office router tells every computer: *"Check this internal phone book first."*
+- The internal phone book maps `registration.jkp.internal` to `192.168.1.50`.
+- The browser hits the Edge Web Server securely without ever touching the public internet.
 
 A server is **only** exposed to the public internet if:
 1. You explicitly open your network firewalls to allow outside traffic in.
 2. You put the domain in a public, global DNS registry pointing to a public IP.
-
-By using a domain name instead of localhost, you are simply giving your internal team an easy-to-remember name to access the server over the private network. It does not automatically make the server public.
 
 ---
