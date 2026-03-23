@@ -138,17 +138,22 @@ We mandate a **Site-to-Site VPN**.
 
 ---
 
-## 10. File Storage (Photos & ID Proofs)
+## 10. File Storage (MinIO vs Local Hard Disk)
 
-> **TL;DR:** We will use a self-hosted S3-compatible object storage (like MinIO) to store the ID proofs and photos for the 100k-200k Satsangis, rather than polluting the PostgreSQL database with binary blobs.
+> **TL;DR:** We will use **MinIO** (a self-hosted S3-compatible object storage) to manage the massive media files instead of raw local disk folders or database blobs.
 
 **The Context & Motivation:**
-With 1-2 Lakh (100k-200k) users, storing photos and scanned ID proofs directly inside a PostgreSQL database (`bytea` columns) will massively bloat the database size. This makes backups painfully slow and degrades database performance. Furthermore, gRPC is optimized for structured data, not streaming large binary files.
+With scaling expectations up to 500,000 registrations, we must manage massive amounts of media data. If each user uploads 2 photos (profile + ID proof) at ~1MB each, we are looking at 1TB of media. 
+
+We considered two local-storage approaches:
+1. **Raw Local Hard Disk (Docker Volumes):** The Python API receives the 1MB file via gRPC (or REST) and saves it to a folder like `/var/app/data/photos/`. 
+   - *Problem:* Passing 1TB of binary files through the gRPC translation proxy adds massive overhead to the Python server. Additionally, creating raw network copies of 1,000,000 individual tiny files using `rsync` for backups takes hours and causes disk I/O bottlenecks.
+2. **MinIO Object Storage:** A dedicated container running on the local server that manages files like an enterprise database instead of a raw folder.
 
 **The Architecture Choice:**
-We will deploy **MinIO** (a lightweight, open-source S3 alternative) via Docker alongside our database.
-- **Why it makes sense:** The React frontend will request a secure "Pre-signed URL" from the Python backend via gRPC. The frontend will then upload the photo *directly* to MinIO using standard HTTP. This keeps the heavy file traffic off our gRPC backend entirely.
-- **Backup Strategy:** The MinIO data volume will be backed up to the secondary in-house server using tools like `rsync` or `rclone`, running on a similar schedule as the database snapshots.
+We will deploy **MinIO**.
+- **Why it makes sense (Direct Uploads):** The React frontend will request a secure "Pre-signed URL" from the Python backend via gRPC. The frontend will then upload the photo *directly* to the MinIO container using standard HTTP. This completely bypasses the Python backend, keeping the compute server extremely fast.
+- **Why it makes sense (Backups):** MinIO has built-in features to continuously "mirror" its contents to a secondary backup server instantly, preventing the need to write fragile custom `rsync` scripts.
 
 ---
 
@@ -193,14 +198,18 @@ If the app crashes for a user in another geography, the developers need to know 
 
 ## 14. Server Topology (Split Node Architecture)
 
-> **TL;DR:** For Phase 1, we will deploy a **Split Node Architecture** using two separate servers: a stateless Compute Server and a stateful Storage Server.
+> **TL;DR:** For Phase 1 Production, we will deploy a **Split Node Architecture** using two separate physical servers: a stateless Compute Server and a stateful Storage Server. We will also maintain a dedicated **Single-Machine Staging Server**.
 
 **The Context & Motivation:**
-With ~200,000 registrations, the database and file storage (MinIO) will consume significant disk space (~400GB+) and memory. Meanwhile, the compute layer (Python/gRPC/FastAPI) is heavily CPU-bound. Placing everything on a single machine risks resource starvation (e.g., heavy database indexing slowing down the Python proxy).
+With the scale reaching up to 500,000 entries (1TB+ of media), placing everything on a single machine risks resource starvation (e.g., heavy database indexing slowing down the Python proxy). We also need a safe way to test updates before pushing to production without interfering with active staff members.
 
-**The Architecture Choice:**
-We will use a **Two-Server Topology**.
+**The Architecture Choice (Production):**
+We will use a **Two-Server Topology** for the live environment.
 - **Server A (Compute Node):** Runs the Edge Proxy, gRPC Proxy, Python Backend, and SuperTokens. It is 100% stateless. If it crashes, we can spin up a new server and pull the Docker images instantly with zero data loss.
 - **Server B (Storage Node):** Runs PostgreSQL and MinIO. This server focuses entirely on high-speed disk I/O and strict backup routines. 
-- **Why it makes sense:** It physically isolates CPU-bound tasks from I/O-bound tasks. It also significantly increases security, as Server B can be placed on a strict private subnet that physically cannot talk to the public internet, only allowing internal connections from Server A.
-- **The Caveat:** This introduces minor network latency between the Python app and the database (e.g., 1-5ms instead of 0.1ms). We mitigate this by writing efficient, aggregated SQL queries rather than looping individual calls.
+- **Why it makes sense:** It physically isolates CPU-bound tasks from I/O-bound tasks. It significantly increases security, as Server B can be placed on a strict private subnet that physically cannot talk to the public internet.
+
+**The Architecture Choice (Staging/Test Server):**
+We will maintain a **Dedicated Staging Server** (a smaller, single remote server) running alongside production on the VPN. 
+- **Purpose:** All Docker images built by GitHub Actions will be manually pulled and deployed to this staging server first. It allows developers and project leads to click through the new UI and verify migrations *before* touching the Split Node production servers.
+- **Topology:** This staging environment will run the entire stack (Compute + Database + MinIO) on a single machine via a unified `docker-compose-staging.yml` file to save costs.

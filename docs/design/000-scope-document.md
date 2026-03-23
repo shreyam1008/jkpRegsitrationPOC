@@ -4,7 +4,7 @@ This document outlines the scope, target audience, and feature boundaries for th
 
 ## Target Audience & Scale
 - **Staff Users:** 100-200 designated staff members (50-60 concurrent active users).
-- **Data Scale:** ~200,000 legacy registration entries (Satsangis) to be migrated and managed, accompanied by massive media data (~400GB+ of profile photos and ID proofs).
+- **Data Scale:** Expected to scale up to 500,000 (5 Lakh) registration entries (Satsangis). This includes ~200,000 legacy entries to be migrated immediately, accompanied by massive media data (~400GB+ to 1TB of profile photos and ID proofs).
 - **Geography:** Distributed across 4-5 different geographical locations within India.
 - **Primary Use Case:** Web-based data entry, rapid retrieval, and legacy data management.
 
