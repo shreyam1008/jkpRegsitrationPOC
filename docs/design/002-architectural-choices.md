@@ -119,3 +119,34 @@ We are taking a phased maturity approach to database backups:
 2. **Better Alternatives (Future Enhancements):**
    - **Off-Site Cloud Backup:** Sending the backups to a secure cloud bucket (like AWS S3) instead of a local server to protect against site-wide disasters.
    - **Managed Cloud Database (e.g., AWS RDS):** Moving the database to a cloud provider that automatically handles hardware maintenance, OS patching, and instantaneous backups. Because the application reads the database location from an environment variable (`DATABASE_URL`), this migration will require zero code changes.
+
+---
+
+## 8. Network Security (Site-to-Site VPN)
+
+> **TL;DR:** We secure the application using a Site-to-Site VPN rather than exposing it to the public internet or relying on individual Zero-Trust clients.
+
+**The Context & Motivation:**
+The system must be securely accessed by 100-200 staff members across 4-5 physical office locations. We considered three models:
+1. **Public Internet with WAF:** Buying a public domain and relying entirely on a Web Application Firewall (like Cloudflare) and login screens. *Risk:* The server is constantly exposed to global bots and zero-day scanners.
+2. **Zero Trust Network Access (e.g., Tailscale):** Every staff member installs a software client on their device. *Risk:* High operational overhead troubleshooting 200 software installations.
+3. **Site-to-Site VPN:** Connecting the routers of the 5 offices directly over encrypted tunnels.
+
+**The Architecture Choice:**
+We mandate a **Site-to-Site VPN**. 
+- **Why it makes sense:** It provides network-level invisibility. To the outside world, the application literally does not exist. Staff members do not need to install any custom VPN software on their devices; they simply connect to the office Wi-Fi, and the router handles the secure routing to the internal server. It maximizes security with zero end-user friction.
+
+---
+
+## 9. Cloud Readiness (Twelve-Factor App)
+
+> **TL;DR:** Although the system is designed to be self-hosted on an internal network, its architecture is "Cloud-Native", meaning it can be migrated to AWS/GCP tomorrow with zero code changes.
+
+**The Context & Motivation:**
+Many self-hosted applications become brittle over time because developers hardcode local file paths, assume local database presence, or rely on state stored directly on the server's hard drive. This makes future cloud migration painful.
+
+**The Architecture Choice:**
+We enforce strict **Twelve-Factor App** principles to ensure true cloud readiness:
+1. **Containerization:** Every single component (UI, Proxy, Backend, Database) is isolated in its own Docker container. Cloud providers are built natively to run containers.
+2. **Stateless Compute:** The Python backend and FastAPI proxy do not store session data or files on their local drives. If the server is destroyed and restarted elsewhere, no data is lost.
+3. **Environment Parity:** The database connection (`DATABASE_URL`), auth secrets, and proxy endpoints are entirely decoupled from the code and injected via Environment Variables. Moving from a local server to AWS simply requires updating a `.env` file, with zero lines of Python or React code changed.

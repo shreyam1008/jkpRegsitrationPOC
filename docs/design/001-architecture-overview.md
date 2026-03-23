@@ -41,7 +41,7 @@ User's Browser (React App)
                            │ (4) SQL via asyncpg/psycopg
                            ▼
 ┌────────────────────────────────────────────────────────┐
-│ Primary Database (PostgreSQL)                          │
+│ Primary Database (PostgreSQL Container)                │
 │ - Port 5432 (Strictly Private)                         │
 │ - Persists Satsangi registration data                  │
 │ - Backed up via automated scheduled snapshots          │
