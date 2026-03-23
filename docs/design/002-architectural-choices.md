@@ -191,14 +191,16 @@ If the app crashes for a user in another geography, the developers need to know 
 
 ---
 
-## 14. Server Topology (Single Node vs Split Nodes)
+## 14. Server Topology (Split Node Architecture)
 
-> **TL;DR:** For Phase 1, we will deploy everything (Proxy, Backend, PostgreSQL, MinIO, SuperTokens) on a **Single Powerful Server** using Docker Compose.
+> **TL;DR:** For Phase 1, we will deploy a **Split Node Architecture** using two separate servers: a stateless Compute Server and a stateful Storage Server.
 
 **The Context & Motivation:**
-With 200k registrations, the database and file storage (MinIO) will consume significant disk space (~400GB+) and memory. The compute layer (Python/gRPC) is CPU-bound. Splitting these into multiple servers (e.g., Server A for Compute, Server B for Database, Server C for MinIO) increases fault tolerance but drastically increases operational complexity and network latency.
+With ~200,000 registrations, the database and file storage (MinIO) will consume significant disk space (~400GB+) and memory. Meanwhile, the compute layer (Python/gRPC/FastAPI) is heavily CPU-bound. Placing everything on a single machine risks resource starvation (e.g., heavy database indexing slowing down the Python proxy).
 
 **The Architecture Choice:**
-We will use a **Single Server Topology** for Phase 1.
-- **Why it makes sense:** Docker Compose natively handles networking between the containers instantly. If we split the database to a different physical server, we introduce network latency between the gRPC backend and the database, and we have to manage multiple Linux environments.
-- **The Caveat:** Because we are using a single server, the "Automated Scheduled Snapshots" and "MinIO syncs" to a *secondary in-house server* (as defined in our backup strategy) become absolutely critical to protect against a single-machine hardware failure. If the compute load becomes too high in Phase 2, we can easily split the stateless Docker containers (Python/Proxy) to a new server because they are decoupled via Environment Variables.
+We will use a **Two-Server Topology**.
+- **Server A (Compute Node):** Runs the Edge Proxy, gRPC Proxy, Python Backend, and SuperTokens. It is 100% stateless. If it crashes, we can spin up a new server and pull the Docker images instantly with zero data loss.
+- **Server B (Storage Node):** Runs PostgreSQL and MinIO. This server focuses entirely on high-speed disk I/O and strict backup routines. 
+- **Why it makes sense:** It physically isolates CPU-bound tasks from I/O-bound tasks. It also significantly increases security, as Server B can be placed on a strict private subnet that physically cannot talk to the public internet, only allowing internal connections from Server A.
+- **The Caveat:** This introduces minor network latency between the Python app and the database (e.g., 1-5ms instead of 0.1ms). We mitigate this by writing efficient, aggregated SQL queries rather than looping individual calls.

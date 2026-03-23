@@ -3,10 +3,10 @@
 This document outlines the scope, target audience, and feature boundaries for the JKP Registration system to prevent feature creep and align development efforts.
 
 ## Target Audience & Scale
-- **Total User Base:** 100-200 designated staff members.
-- **Concurrent Usage:** 50-60 active users at any given time.
+- **Staff Users:** 100-200 designated staff members (50-60 concurrent active users).
+- **Data Scale:** ~200,000 legacy registration entries (Satsangis) to be migrated and managed, accompanied by massive media data (~400GB+ of profile photos and ID proofs).
 - **Geography:** Distributed across 4-5 different geographical locations within India.
-- **Primary Use Case:** Web-based data entry and retrieval.
+- **Primary Use Case:** Web-based data entry, rapid retrieval, and legacy data management.
 
 ## Phase 1: Staff Registration Tool (Current Focus)
 The primary objective of Phase 1 is to replace legacy systems with a modern, fast, and type-safe registration flow.
@@ -16,8 +16,11 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 - Multi-step registration workflow for new Satsangis.
 - Application-specific authentication using a self-hosted identity provider (SuperTokens or Logto).
 - Secure internal access via Site-to-Site VPN across all offices, utilizing an Internal DNS (e.g., `registration.jkp.internal`) to map domain names without public internet exposure.
-- Self-hosted PostgreSQL database.
-- Automated interval backups (e.g., 3-hour `pg_dump` snapshots) to a secondary in-house server. (Continuous WAL archiving is a "nice-to-have" secondary goal).
+- Two-Server Split Topology: A stateless Compute Server (App/Proxy) and a Stateful Server (PostgreSQL/MinIO).
+- Self-hosted PostgreSQL database for structured data.
+- Self-hosted S3-compatible object storage (MinIO) for heavy media files (photos/ID proofs).
+- Dedicated Python ETL scripts for the one-time migration of 200,000 legacy registration records.
+- Automated interval backups (e.g., 3-hour `pg_dump` snapshots and MinIO syncs) to a secondary in-house server. (Continuous WAL archiving is a "nice-to-have" secondary goal).
 - gRPC backend for strict type-safety and high performance.
 
 **Out-of-Scope for Phase 1:**
