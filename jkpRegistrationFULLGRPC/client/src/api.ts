@@ -18,7 +18,7 @@ import type { HealthResponse, Satsangi, SatsangiCreate } from './generated/satsa
 // ---------------------------------------------------------------------------
 
 const transport = createGrpcWebTransport({
-  baseUrl: 'http://localhost:8080',
+  baseUrl: import.meta.env.VITE_GRPC_URL || 'http://localhost:8080',
 })
 
 const client = createClient(SatsangiService, transport)

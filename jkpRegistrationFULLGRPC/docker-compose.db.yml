@@ -1,0 +1,28 @@
+# Database — runs on the DB server (separate machine)
+#
+# Start:
+#   docker compose -f docker-compose.db.yml up -d
+#
+# Exposes 5432 on the host so the app server can reach it via IP
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: jkp_reg_poc_grpc
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jkp_reg_poc_grpc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

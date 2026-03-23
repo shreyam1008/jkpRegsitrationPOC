@@ -1,22 +1,6 @@
-"""PostgreSQL connection and schema management."""
+-- Runs automatically on first container start via /docker-entrypoint-initdb.d/
+-- Database is already created by POSTGRES_DB env var; this sets up the schema.
 
-import logging
-import os
-
-import psycopg2
-import psycopg2.extras
-
-logger = logging.getLogger(__name__)
-
-DB_CONFIG = {
-    "host": os.environ.get("DB_HOST", "localhost"),
-    "port": int(os.environ.get("DB_PORT", "5432")),
-    "dbname": os.environ.get("DB_NAME", "jkp_reg_poc_grpc"),
-    "user": os.environ.get("DB_USER", "postgres"),
-    "password": os.environ.get("DB_PASSWORD", "postgres"),
-}
-
-CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS satsangis (
     satsangi_id         VARCHAR(8) PRIMARY KEY,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -59,21 +43,3 @@ CREATE INDEX IF NOT EXISTS idx_satsangis_phone
     ON satsangis (phone_number);
 CREATE INDEX IF NOT EXISTS idx_satsangis_email
     ON satsangis (LOWER(email)) WHERE email IS NOT NULL;
-"""
-
-
-def get_connection():
-    """Get a new database connection."""
-    return psycopg2.connect(**DB_CONFIG)
-
-
-def init_db():
-    """Create the satsangis table if it doesn't exist."""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(CREATE_TABLE_SQL)
-        conn.commit()
-        logger.info("Database schema initialized successfully")
-    finally:
-        conn.close()

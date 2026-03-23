@@ -1,0 +1,42 @@
+# Frontend + Backend + Cloudflare Tunnel — runs on the app server
+#
+# Build & start:
+#   docker compose up -d --build
+#
+# DB lives on a separate server (see docker-compose.db.yml)
+# Backend connects to DB at the IP hardcoded in docker/server/Dockerfile
+#
+# Cloudflare tunnel routes (configured in Zero Trust dashboard):
+#   app.yourdomain.com  → http://client:3000
+#   api.yourdomain.com  → http://server:8080
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/client/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiNjEyZmQ0MjlmNzRkODFhMmE5MDZhZGM5NTNhNGQ0M2EiLCJ0IjoiMjYyYjlmZTUtNjRjOS00ZDUyLTgzNjctYjc5ZDJiN2EyNWVmIiwicyI6Ik9EY3dZell5TlRNdFkyVTNPQzAwTnpBNUxXSmpaV1l0TlROaVpUaGtOV0k0TURnMSJ9
+    depends_on:
+      - server
+      - client
+    deploy:
+      resources:
+        limits:
+          memory: 128M

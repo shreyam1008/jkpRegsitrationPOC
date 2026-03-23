@@ -1,0 +1,25 @@
+# Dependencies (reinstalled in container)
+client/node_modules/
+server/.venv/
+
+# Build output
+client/dist/
+**/__pycache__/
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+*.sw?
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Not needed at runtime
+proto/
+*.md
