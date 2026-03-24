@@ -1,11 +1,23 @@
-"""PostgreSQL-backed storage for satsangi records."""
+"""PostgreSQL-backed storage for satsangi records.
+
+All functions borrow a connection from the shared pool (db.get_conn)
+and return it automatically via the context manager.
+"""
+
+from __future__ import annotations
+
+from typing import Any
 
 import psycopg2.extras
-from app.db import get_connection
+
+from app.db import get_conn
 from app.models import Satsangi, SatsangiCreate
 
-# All columns in insertion order (excluding satsangi_id and created_at which are auto-generated)
-_INSERT_FIELDS = [
+# ---------------------------------------------------------------------------
+# Column lists + pre-computed SQL fragments (built once at import time)
+# ---------------------------------------------------------------------------
+
+_INSERT_FIELDS = (
     "satsangi_id", "first_name", "last_name", "phone_number", "age",
     "date_of_birth", "pan", "gender", "special_category", "nationality",
     "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
@@ -13,9 +25,9 @@ _INSERT_FIELDS = [
     "district", "state", "pincode", "emergency_contact", "ex_center_satsangi_id",
     "introduced_by", "has_room_in_ashram", "email", "banned", "first_timer",
     "date_of_first_visit", "notes",
-]
+)
 
-_ALL_FIELDS = [
+_ALL_FIELDS = (
     "satsangi_id", "created_at", "first_name", "last_name", "phone_number",
     "age", "date_of_birth", "pan", "gender", "special_category", "nationality",
     "govt_id_type", "govt_id_number", "id_expiry_date", "id_issuing_country",
@@ -23,38 +35,65 @@ _ALL_FIELDS = [
     "district", "state", "pincode", "emergency_contact", "ex_center_satsangi_id",
     "introduced_by", "has_room_in_ashram", "email", "banned", "first_timer",
     "date_of_first_visit", "notes",
-]
+)
+
+_COLS = ", ".join(_ALL_FIELDS)
+_INSERT_COLS = ", ".join(_INSERT_FIELDS)
+_INSERT_PH = ", ".join(["%s"] * len(_INSERT_FIELDS))
+
+_INSERT_SQL = (
+    f"INSERT INTO satsangis ({_INSERT_COLS}) VALUES ({_INSERT_PH}) "
+    f"RETURNING {_COLS}"
+)
+
+_SEARCH_SQL = f"""
+    SELECT {_COLS} FROM satsangis
+    WHERE first_name ILIKE %s
+       OR last_name ILIKE %s
+       OR (first_name || ' ' || last_name) ILIKE %s
+       OR phone_number ILIKE %s
+       OR satsangi_id ILIKE %s
+       OR COALESCE(email, '') ILIKE %s
+       OR COALESCE(pan, '') ILIKE %s
+       OR COALESCE(govt_id_number, '') ILIKE %s
+       OR COALESCE(nick_name, '') ILIKE %s
+       OR COALESCE(ex_center_satsangi_id, '') ILIKE %s
+       OR COALESCE(city, '') ILIKE %s
+       OR COALESCE(pincode, '') ILIKE %s
+    ORDER BY created_at DESC
+"""
+
+_LIST_SQL = f"SELECT {_COLS} FROM satsangis ORDER BY created_at DESC"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
-def _row_to_satsangi(row: dict) -> Satsangi:
+def _row_to_satsangi(row: dict[str, Any]) -> Satsangi:
     """Convert a database row dict to a Satsangi model."""
     data = dict(row)
-    # Convert timestamp to ISO string
     if data.get("created_at"):
         data["created_at"] = data["created_at"].isoformat()
     return Satsangi(**data)
 
 
+# ---------------------------------------------------------------------------
+# Public API (called by grpc_server.py)
+# ---------------------------------------------------------------------------
+
+
 def create_satsangi(data: SatsangiCreate) -> Satsangi:
     """Insert a new satsangi into the database and return it."""
     satsangi = Satsangi(**data.model_dump())
-    placeholders = ", ".join(["%s"] * len(_INSERT_FIELDS))
-    columns = ", ".join(_INSERT_FIELDS)
     values = [getattr(satsangi, f) for f in _INSERT_FIELDS]
 
-    conn = get_connection()
-    try:
+    with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                f"INSERT INTO satsangis ({columns}) VALUES ({placeholders}) "
-                f"RETURNING {', '.join(_ALL_FIELDS)}",
-                values,
-            )
+            cur.execute(_INSERT_SQL, values)
             row = cur.fetchone()
         conn.commit()
         return _row_to_satsangi(row)
-    finally:
-        conn.close()
 
 
 def search_satsangis(query: str) -> list[Satsangi]:
@@ -63,44 +102,25 @@ def search_satsangis(query: str) -> list[Satsangi]:
         return get_all_satsangis()
 
     pattern = f"%{query.strip()}%"
-    sql = f"""
-        SELECT {', '.join(_ALL_FIELDS)} FROM satsangis
-        WHERE LOWER(first_name) LIKE LOWER(%s)
-           OR LOWER(last_name) LIKE LOWER(%s)
-           OR LOWER(first_name || ' ' || last_name) LIKE LOWER(%s)
-           OR phone_number LIKE %s
-           OR LOWER(satsangi_id) LIKE LOWER(%s)
-           OR LOWER(COALESCE(email, '')) LIKE LOWER(%s)
-           OR LOWER(COALESCE(pan, '')) LIKE LOWER(%s)
-           OR LOWER(COALESCE(govt_id_number, '')) LIKE LOWER(%s)
-           OR LOWER(COALESCE(nick_name, '')) LIKE LOWER(%s)
-           OR LOWER(COALESCE(ex_center_satsangi_id, '')) LIKE LOWER(%s)
-           OR LOWER(COALESCE(city, '')) LIKE LOWER(%s)
-           OR COALESCE(pincode, '') LIKE %s
-        ORDER BY created_at DESC
-    """
     params = [pattern] * 12
 
-    conn = get_connection()
-    try:
+    with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
+            cur.execute(_SEARCH_SQL, params)
             rows = cur.fetchall()
         return [_row_to_satsangi(row) for row in rows]
-    finally:
-        conn.close()
 
 
 def get_all_satsangis(limit: int = 0) -> list[Satsangi]:
     """Return satsangis, newest first. If limit > 0, return only that many."""
-    conn = get_connection()
-    try:
+    sql = _LIST_SQL
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT %s"
+        params.append(limit)
+
+    with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            sql = f"SELECT {', '.join(_ALL_FIELDS)} FROM satsangis ORDER BY created_at DESC"
-            if limit > 0:
-                sql += f" LIMIT {int(limit)}"
-            cur.execute(sql)
+            cur.execute(sql, params)
             rows = cur.fetchall()
         return [_row_to_satsangi(row) for row in rows]
-    finally:
-        conn.close()

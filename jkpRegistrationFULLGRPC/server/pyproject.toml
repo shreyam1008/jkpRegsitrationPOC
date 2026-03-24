@@ -11,12 +11,12 @@ dependencies = [
     "fastapi==0.135.1",
     "uvicorn==0.41.0",
     "psycopg2-binary>=2.9.9",
-    "requests>=2.32.5",
 ]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+exclude = ["app/generated"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
@@ -24,6 +24,7 @@ select = ["E", "F", "I", "UP"]
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+exclude = ["app/generated"]
 
 # Run tasks with: uv run task <task_name>
 # Example: uv run task dev

@@ -45,6 +45,13 @@ ENV DB_HOST=10.3.26.220 \
 
 USER appuser
 
-EXPOSE 8080
+EXPOSE 8080 50051
 
-ENTRYPOINT ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Single worker — the in-process gRPC server binds :50051, so forking
+# multiple workers would cause port clashes. Concurrency comes from:
+#   • uvicorn's async event loop (handles hundreds of concurrent HTTP conns)
+#   • gRPC ThreadPoolExecutor (10 threads for DB-bound RPCs)
+#   • DB connection pool (up to 20 pooled connections)
+ENTRYPOINT ["python", "-m", "uvicorn", "app.main:app", \
+            "--host", "0.0.0.0", "--port", "8080", \
+            "--limit-max-requests", "50000"]

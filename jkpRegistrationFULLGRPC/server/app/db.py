@@ -1,10 +1,14 @@
-"""PostgreSQL connection and schema management."""
+"""PostgreSQL connection pool and schema management."""
 
+from __future__ import annotations
+
+import contextlib
 import logging
 import os
+from collections.abc import Generator
 
-import psycopg2
-import psycopg2.extras
+import psycopg2.extensions
+from psycopg2 import pool
 
 logger = logging.getLogger(__name__)
 
@@ -61,19 +65,42 @@ CREATE INDEX IF NOT EXISTS idx_satsangis_email
     ON satsangis (LOWER(email)) WHERE email IS NOT NULL;
 """
 
+# ---------------------------------------------------------------------------
+# Thread-safe connection pool (created once at startup)
+# ---------------------------------------------------------------------------
 
-def get_connection():
-    """Get a new database connection."""
-    return psycopg2.connect(**DB_CONFIG)
+_pool: pool.ThreadedConnectionPool | None = None
 
 
-def init_db():
-    """Create the satsangis table if it doesn't exist."""
-    conn = get_connection()
+def init_pool(minconn: int = 2, maxconn: int = 20) -> None:
+    """Create the connection pool and initialize the DB schema."""
+    global _pool
+    _pool = pool.ThreadedConnectionPool(minconn, maxconn, **DB_CONFIG)
+    conn = _pool.getconn()
     try:
         with conn.cursor() as cur:
             cur.execute(CREATE_TABLE_SQL)
         conn.commit()
-        logger.info("Database schema initialized successfully")
+        logger.info("DB pool created (%d–%d conns), schema initialized", minconn, maxconn)
     finally:
-        conn.close()
+        _pool.putconn(conn)
+
+
+def close_pool() -> None:
+    """Shut down the pool (call on app exit)."""
+    global _pool
+    if _pool:
+        _pool.closeall()
+        _pool = None
+
+
+@contextlib.contextmanager
+def get_conn() -> Generator[psycopg2.extensions.connection, None, None]:
+    """Borrow a connection from the pool; auto-returns on exit."""
+    if _pool is None:
+        raise RuntimeError("DB pool not initialised — call init_pool() first")
+    conn = _pool.getconn()
+    try:
+        yield conn
+    finally:
+        _pool.putconn(conn)

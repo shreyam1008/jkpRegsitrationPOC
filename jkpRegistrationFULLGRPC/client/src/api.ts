@@ -8,6 +8,7 @@
  *   Browser  --grpc-web-->  Proxy (:8080)  --gRPC-->  Server (:50051)  --SQL-->  PostgreSQL
  */
 
+import type { MessageInit } from '@bufbuild/protobuf'
 import { createClient } from '@connectrpc/connect'
 import { createGrpcWebTransport } from '@connectrpc/connect-web'
 import { SatsangiService } from './generated/satsangi_pb'
@@ -33,17 +34,18 @@ export type { Satsangi, SatsangiCreate }
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function createSatsangi(data: Partial<SatsangiCreate>): Promise<Satsangi> {
+/** Require the 3 mandatory fields; everything else is optional. */
+type CreateInput = { firstName: string; lastName: string; phoneNumber: string } &
+  Omit<MessageInit<SatsangiCreate>, 'firstName' | 'lastName' | 'phoneNumber' | '$typeName' | '$unknown'>
+
+export async function createSatsangi(data: CreateInput): Promise<Satsangi> {
   return await client.createSatsangi({
-    firstName: data.firstName ?? '',
-    lastName: data.lastName ?? '',
-    phoneNumber: data.phoneNumber ?? '',
-    nationality: data.nationality ?? 'Indian',
-    country: data.country ?? 'India',
-    printOnCard: data.printOnCard ?? false,
-    hasRoomInAshram: data.hasRoomInAshram ?? false,
-    banned: data.banned ?? false,
-    firstTimer: data.firstTimer ?? false,
+    nationality: 'Indian',
+    country: 'India',
+    printOnCard: false,
+    hasRoomInAshram: false,
+    banned: false,
+    firstTimer: false,
     ...data,
   })
 }

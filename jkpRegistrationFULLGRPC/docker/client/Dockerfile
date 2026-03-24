@@ -14,23 +14,10 @@ COPY client/ .
 RUN bunx vite build
 
 # ============================================================
-# Stage 2 — Serve with nginx:alpine (~75 MB final image)
+# Stage 2 — Caddy serves static files + reverse-proxies API
 # ============================================================
-FROM nginx:1.27-alpine AS runtime
+FROM caddy:2-alpine
 
-RUN rm /etc/nginx/conf.d/default.conf
+COPY --from=builder /build/dist /srv
 
-COPY docker/client/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /build/dist /usr/share/nginx/html
-
-RUN chown -R nginx:nginx /usr/share/nginx/html \
-    && chown -R nginx:nginx /var/cache/nginx \
-    && chown -R nginx:nginx /var/log/nginx \
-    && touch /var/run/nginx.pid \
-    && chown nginx:nginx /var/run/nginx.pid
-
-USER nginx
-
-EXPOSE 3000
-
-ENTRYPOINT ["nginx", "-g", "daemon off;"]
+EXPOSE 80 443

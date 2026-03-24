@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from uuid import uuid4
 from datetime import datetime
+from uuid import uuid4
+
+from pydantic import BaseModel, Field
 
 
 class SatsangiCreate(BaseModel):

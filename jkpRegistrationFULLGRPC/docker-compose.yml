@@ -1,4 +1,4 @@
-# Frontend + Backend + Cloudflare Tunnel — runs on the app server
+# Backend + Client (Caddy serves static + proxies API) — runs on the app server
 #
 # Build & start:
 #   docker compose up -d --build
@@ -6,9 +6,28 @@
 # DB lives on a separate server (see docker-compose.db.yml)
 # Backend connects to DB at the IP hardcoded in docker/server/Dockerfile
 #
-# Cloudflare tunnel routes (configured in Zero Trust dashboard):
-#   app.yourdomain.com  → http://client:3000
-#   api.yourdomain.com  → http://server:8080
+# Architecture (3 containers):
+#   app.yourdomain.com  →  client (Caddy file_server /srv)  — built React SPA
+#   api.yourdomain.com  →  client (Caddy reverse_proxy)     →  server:8080 (grpc-web proxy → gRPC :50051)
+#   tunnel              →  cloudflared (Cloudflare Tunnel)   →  client:443 (bypasses firewall, hides IP)
+#
+# ── Exposing to the internet (pick one) ──────────────────────
+#
+#   Option A — Traditional (direct IP):
+#     1. Open ports 80/443 on your firewall/router
+#     2. Point A records (app.yourdomain.com, api.yourdomain.com) to your public IP
+#     3. Remove "tls internal" from Caddyfile → Caddy auto-fetches Let's Encrypt certs
+#     4. The tunnel service is not needed — stop/remove it
+#
+#   Option B — Cloudflare Tunnel (zero exposed ports, IP hidden):
+#     1. No firewall/port changes needed
+#     2. Create a tunnel in Cloudflare Zero Trust dashboard → get a token
+#     3. Set the token in the tunnel service below
+#     4. In the CF dashboard, map app.yourdomain.com → https://client:443
+#        and api.yourdomain.com → https://client:443
+#     5. Keep "tls internal" in Caddyfile — CF terminates public TLS,
+#        cloudflared trusts the internal cert to Caddy over the tunnel
+#     6. Ports 80/443 on the host are optional (only needed for LAN access)
 
 services:
   server:
@@ -16,8 +35,8 @@ services:
       context: .
       dockerfile: docker/server/Dockerfile
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
 
   client:
     build:
@@ -25,18 +44,32 @@ services:
       dockerfile: docker/client/Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "80:80"       # HTTP → HTTPS redirect
+      - "443:443"     # HTTPS
+      - "443:443/udp" # HTTP/3 (QUIC) — lower latency
+    volumes:
+      - ./docker/client/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # TLS certs persist across restarts
+      - caddy_config:/config
     depends_on:
       - server
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
+  # ── Cloudflare Tunnel (Option B — comment out if using direct IP) ──
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token eyJhIjoiNjEyZmQ0MjlmNzRkODFhMmE5MDZhZGM5NTNhNGQ0M2EiLCJ0IjoiMjYyYjlmZTUtNjRjOS00ZDUyLTgzNjctYjc5ZDJiN2EyNWVmIiwicyI6Ik9EY3dZell5TlRNdFkyVTNPQzAwTnpBNUxXSmpaV1l0TlROaVpUaGtOV0k0TURnMSJ9
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     depends_on:
-      - server
       - client
     deploy:
       resources:
         limits:
           memory: 128M
+
+volumes:
+  caddy_data:
+  caddy_config:
