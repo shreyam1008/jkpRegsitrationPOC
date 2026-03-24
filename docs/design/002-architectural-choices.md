@@ -255,5 +255,26 @@ Running these tasks synchronously directly inside the web server creates three c
 - **Browser & Proxy Timeouts:** Even if the server had infinite CPU cores and processes, web browsers, gRPC proxies, and load balancers structurally distrust the network and enforce strict timeouts (typically 30-60 seconds). A 3-minute synchronous task will result in a proactively severed connection, presenting a failure to the user even if the server continues working.
 
 **The Architecture Choice:**
-We will implement a **Background Task Queue** in the Compute Node.
-- **Why it makes sense:** When a staff member clicks "Export Data", the Python backend instantly replies "Job Started" and returns a Task ID. A separate Python worker process (running in the background) picks up the heavy work, generates the CSV, and saves it to MinIO. The React UI can simply poll the server to see when the file is ready to download. This keeps the main application completely unblocked.
+We will implement a **Phased Background Task Queue** within the Compute Node, specifically avoiding the local file system.
+
+*   **Why not local files?** A production environment runs multiple worker processes. If queues are written to local files, processes will encounter fatal race conditions (simultaneously trying to read/delete the same file). Furthermore, Docker containers are ephemeral; if the server restarts, all pending file-based tasks are permanently lost.
+
+*   **Phase 1 (Infrastructure Minimalist):** We will use a **PostgreSQL-backed queue** (e.g., `Procrastinate` or `Taskiq`). 
+    *   *Why:* It introduces zero new infrastructure. The heavy task is decoupled from the web process and safely stored in the ACID-compliant database. The web server instantly replies "Job Started". A separate, invisible Python worker process (with its own isolated GIL) polls the database, picks up the task, and executes the heavy lifting without affecting the live web app.
+*   **Phase 2 (High Scale):** If background tasks scale to thousands per hour, or if the Live Dashboard requires instant WebSocket synchronization, we will introduce **Redis** as a dedicated message broker and migrate the queue to **RQ (Redis Queue)** or **Celery**.
+
+---
+
+## 17. Caching Strategy
+
+> **TL;DR:** We will avoid introducing Redis on Day 1 to prevent infrastructure bloat. We will rely on strict Browser-side caching for the UI and Python In-Memory caching for the backend. Redis will be deferred to Phase 2 for distributed needs.
+
+**The Context & Motivation:**
+Certain data, like the mapping of "Country -> States" or "District -> Zones", is heavily read but almost never changes. Querying the PostgreSQL database for this static data on every dropdown click is inefficient. While a distributed cache like Redis is the industry standard, it requires managing an entirely separate stateful container. Note: Because gRPC uses `POST` requests with binary payloads, traditional Edge Web Server caching (via Nginx/Caddy) is technically not viable.
+
+**The Architecture Choice:**
+We will adopt a **Multi-Tiered Phased Caching Strategy**:
+
+*   **Tier 1: Browser-Side Caching (React Query):** The absolute fastest cache is the user's local machine. When a staff member selects "India", React fetches the states and caches the JSON locally using tools like `@tanstack/react-query`. Subsequent clicks instantly load data from the browser's RAM without making any network request.
+*   **Tier 2: Python In-Memory Caching (Phase 1):** For static configuration required by the backend, we will use Python's built-in `@lru_cache`. The data lives directly in the Python worker's RAM. While this duplicates a few kilobytes of memory across the 4 worker processes, it completely bypasses the database with zero extra infrastructure.
+*   **Tier 3: Distributed Caching (Phase 2 - Redis):** We will introduce a centralized **Redis** container only when strict, multi-process consistency is mandatory. This includes requirements like robust API Rate Limiting, cross-device Session Management, or highly complex, frequently changing Live Dashboards.

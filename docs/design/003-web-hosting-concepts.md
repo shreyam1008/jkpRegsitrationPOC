@@ -68,15 +68,7 @@ This is what we mean by "Same Domain Hosting". Your frontend (the static files) 
 
 ---
 
-## 3. Localhost vs. a Domain Name (Does a domain mean it's public?)
-
-A common point of confusion is what a domain name actually means for security.
-
-### What is Localhost?
-`localhost` is a special networking term that literally means "this exact computer right here." 
-If you run your app on `localhost:5174`, the only person in the entire world who can access it is you, sitting at that specific keyboard. It is perfectly secure, but useless for a team of 5-6 staff members.
-
-## 4. Internal DNS & VPNs (How to have a Domain without the Public Internet)
+## 3. Internal DNS & VPNs (How to have a Domain without the Public Internet)
 
 When moving away from `localhost`, many developers assume they must buy a public domain and expose their server to the internet. This is not true for internal applications.
 
@@ -95,3 +87,47 @@ A server is **only** exposed to the public internet if:
 2. You put the domain in a public, global DNS registry pointing to a public IP.
 
 ---
+
+## 5. Python Concurrency & The GIL (Why Web Servers Block)
+
+A common misconception is how Python handles multiple tasks at once. To understand why background queues are necessary, you must understand the GIL.
+
+### The Global Interpreter Lock (GIL)
+Unlike C++, where multiple threads can run in parallel on different CPU cores sharing the same memory, Python (specifically standard CPython) has a Global Interpreter Lock. 
+- The GIL dictates that **only one thread can execute Python code at a time** within a single process.
+- **I/O Bound:** If a thread is waiting on the network or database, it drops the GIL. Another thread can run. This is why Python is great for standard web APIs.
+- **CPU Bound:** If a thread is doing heavy math or formatting a 50,000-line CSV, it *holds* the GIL. Every other thread in that process is completely frozen.
+
+### Multi-processing Limits
+To bypass the GIL, web servers use **Multi-processing** (running 4 entirely separate Python processes, mapped to 4 CPU cores). 
+However, if 4 staff members request massive CSV exports simultaneously, all 4 processes are pinned at 100% CPU. When the 5th staff member tries to load the dashboard, there are no processes left. The server appears dead, and the browser eventually times out.
+
+---
+
+## 6. Decoupling with Background Queues
+
+To solve the multi-processing bottleneck, we use a concept called **Decoupling**. 
+
+### The Bad Way (Synchronous)
+1. Browser asks for an Export.
+2. The Web Process does the export (takes 3 minutes).
+3. Browser waits 3 minutes. (Likely fails due to network timeout limits).
+
+### The Decoupled Way (Asynchronous Queue)
+1. Browser asks for an Export.
+2. The Web Process instantly writes a tiny note to a database/Redis: `{"task": "export"}`.
+3. The Web Process replies to the browser in 5 milliseconds: "Job Started!" (The Web Process is now free for the next user).
+4. A completely separate **Worker Process** (which does not answer web requests and has its own GIL) constantly checks the database, sees the note, and spends 3 minutes doing the export in the background.
+
+*Note: We cannot use the local file system (e.g., writing `task.json`) for queues because multiple worker processes will hit race conditions trying to read/delete the same file, and ephemeral Docker containers will delete pending tasks if restarted.*
+
+---
+
+## 7. The Tiers of Caching
+
+When a system is slow, the immediate reaction is often "add Redis". However, caching exists in tiers. The closer to the user you cache, the faster and cheaper it is.
+
+1. **Browser Caching (The Client):** The absolute fastest cache. Tools like React Query save database responses in the browser's RAM. If a user clicks "India" twice, the second click instantly loads the states from local RAM without touching the network.
+2. **Edge Web Server Caching (Nginx/Caddy):** The reverse proxy remembers HTTP `GET` responses. However, because gRPC uses `POST` requests with binary data, edge caching is usually technically impossible for gRPC APIs.
+3. **In-Memory Server Caching (Python):** Using decorators like `@lru_cache`, the Python process saves data in its own RAM. It bypasses the database completely. The downside is that if you have 4 worker processes, they don't share this memory (Process A doesn't know what Process B cached).
+4. **Distributed Caching (Redis):** A dedicated, centralized, lightning-fast RAM database. All 4 Python processes connect to it. It is required when data *must* be instantly consistent across all processes (like Rate Limiting or Session Management), but it adds significant infrastructure complexity.
