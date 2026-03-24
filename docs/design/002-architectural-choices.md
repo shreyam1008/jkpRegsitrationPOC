@@ -222,3 +222,34 @@ We will use a **Two-Server Topology** for the live environment.
 We will maintain a **Dedicated Staging Server** (a smaller, single remote server) running alongside production on the VPN. 
 - **Purpose:** All Docker images built by GitHub Actions will be manually pulled and deployed to this staging server first. It allows developers and project leads to click through the new UI and verify migrations *before* touching the Split Node production servers.
 - **Topology & Backups:** This staging environment will run the entire stack (Compute + Database + MinIO) on a single machine via a unified `docker-compose-staging.yml` file to save costs. **The staging server will explicitly NOT be backed up**, as it only holds synthetic/temporary test data.
+
+---
+
+## 15. Search & Indexing Strategy
+
+> **TL;DR:** We will rely on native PostgreSQL extensions (`pg_trgm` and Full-Text Search) to handle searching across 500,000 records, deferring dedicated search engines (like Elasticsearch or Typesense) to avoid unnecessary infrastructure bloat.
+
+**The Context & Motivation:**
+With scaling expectations up to 500,000 (5 Lakh) registrations, staff members will frequently need to search for existing Satsangis to avoid duplicate entries. Standard SQL `LIKE '%name%'` queries require scanning every single row in the database, which becomes painfully slow (taking seconds rather than milliseconds) at this scale.
+
+**The Architecture Choice:**
+We will use **PostgreSQL Trigram Indexes (`pg_trgm`)** and **Native Full-Text Search**.
+- **Why it makes sense:** PostgreSQL is incredibly powerful. By adding a simple extension like `pg_trgm`, we can enable lightning-fast "fuzzy matching" (e.g., finding "Shreyam" even if the staff typed "Shryam") without needing to deploy, sync, and manage a completely separate search container.
+- **When to reconsider:** If we ever implement complex, multi-faceted filtering (e.g., "Find all users in Delhi who registered between 2018-2020 and have a Form C, sorted by relevance"), we will re-evaluate moving search to a dedicated engine in Phase 2.
+
+---
+
+## 16. Background Job Processing
+
+> **TL;DR:** We will use a dedicated **Background Task Queue** (like Celery + Redis or native Python async workers) to handle long-running tasks, ensuring the gRPC API remains instantly responsive.
+
+**The Context & Motivation:**
+Certain tasks take too long to run synchronously within an HTTP/gRPC request. For example:
+1. Exporting 50,000 user records to a CSV file for reporting.
+2. The initial one-time ETL migration of 200,000 legacy records.
+3. Sending out bulk SMS OTPs or notifications.
+If the Python gRPC server tries to do this while the user's browser waits, the connection will time out, and the server will be blocked from handling other staff members.
+
+**The Architecture Choice:**
+We will implement a **Background Task Queue** in the Compute Node.
+- **Why it makes sense:** When a staff member clicks "Export Data", the Python backend instantly replies "Job Started" and returns a Task ID. A separate Python worker process (running in the background) picks up the heavy work, generates the CSV, and saves it to MinIO. The React UI can simply poll the server to see when the file is ready to download. This keeps the main application completely unblocked.
