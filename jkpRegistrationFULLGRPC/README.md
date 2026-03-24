@@ -128,7 +128,7 @@ You never write request/response types by hand.
 │   │  • Indexes: name, phone, email                        │                       │
 │   └──────────────────────────────────────────────────────┘                       │
 │                                                                                  │
-│   ┌──────────────────────────────────────────────────────┐  (optional)           │
+│   ┌──────────────────────────────────────────────────(optional-if WEB)           │
 │   │  Cloudflare Tunnel  (cloudflared container)           │                       │
 │   │  • Zero exposed ports — no firewall changes           │                       │
 │   │  • Hides server IP from the internet                  │                       │
