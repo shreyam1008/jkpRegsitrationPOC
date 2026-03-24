@@ -23,10 +23,14 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 - Dedicated Python ETL scripts for the one-time migration of 200,000 legacy registration records.
 - Automated interval backups (e.g., 3-hour `pg_dump` snapshots and MinIO syncs) to a secondary in-house server. (Continuous WAL archiving is a "nice-to-have" secondary goal).
 - gRPC backend for strict type-safety and high performance.
+- PostgreSQL-backed Background Task Queue for processing heavy synchronous workloads (e.g., massive CSV exports) without blocking the primary web threads.
+- Browser-side and Python In-Memory caching for static UI data (e.g., Country/State dropdowns).
 
 **Out-of-Scope for Phase 1:**
 - Public self-registration.
 - Native mobile applications (iOS/Android).
+- Complex multi-faceted search engines (like Elasticsearch).
+- Dedicated Distributed Caching or complex Message Brokers (Redis, RabbitMQ) unless absolutely forced by scale.
 
 ## Phase 2: Public Expansion (Future Capability)
 The architecture designed in Phase 1 intentionally supports these future requirements without requiring a foundational rewrite.
