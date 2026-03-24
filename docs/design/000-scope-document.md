@@ -15,7 +15,7 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 - Responsive Web Application (React) accessible via PC and Mobile browsers.
 - Multi-step registration workflow for new Satsangis.
 - Form C data capture and document storage specifically for the registration of foreign nationals.
-- Application-specific authentication using a self-hosted identity provider (SuperTokens or Logto).
+- Centralized organization-wide authentication using a self-hosted identity provider (Keycloak), establishing the foundation for SSO across all future internal apps.
 - Secure internal access via Site-to-Site VPN across all offices, utilizing an Internal DNS (e.g., `registration.jkp.internal`) to map domain names without public internet exposure.
 - Two-Server Split Topology: A stateless Compute Server (App/Proxy) and a Stateful Server (PostgreSQL/MinIO).
 - Self-hosted PostgreSQL database for structured data.
@@ -27,12 +27,11 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 **Out-of-Scope for Phase 1:**
 - Public self-registration.
 - Native mobile applications (iOS/Android).
-- Centralized organization-wide SSO (authentication is currently scoped only to this app).
 
 ## Phase 2: Public Expansion (Future Capability)
 The architecture designed in Phase 1 intentionally supports these future requirements without requiring a foundational rewrite.
 
 **Planned Features:**
 - **Public Self-Registration:** Opening specific web routes to the public for ID-based (non-login) registration. The plan is to use a Firebase OTP mechanism to verify users without requiring them to create a persistent account.
-- **Centralized Authentication:** Scaling the application-specific SuperTokens/Logto instance to become the SSO provider for all future organization apps.
+- **SSO Expansion:** Scaling the Keycloak instance to onboard other internal organization apps.
 - **Cloud Database Migration:** Transitioning the self-hosted PostgreSQL database to a managed public cloud (e.g., AWS RDS) simply by updating environment variables.

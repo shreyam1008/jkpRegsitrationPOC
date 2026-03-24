@@ -32,7 +32,7 @@ User's Browser (React App)
 │           ▼                                            │
 │ ┌────────────────────────────────────────────────────┐ │
 │ │ Backend gRPC Server (Python/grpcio)                │ │
-│ │ - Validates SuperTokens Auth JWT                   │ │
+│ │ - Validates Keycloak Auth JWT                      │ │
 │ └─────────┬──────────────────────────────────────────┘ │
 └───────────┼────────────────────────────────────────────┘
             │
@@ -58,9 +58,9 @@ User's Browser (React App)
 When a staff member registers a new Satsangi, the following workflow occurs across the Site-to-Site VPN:
 
 1. **The Gateway (Compute Server):** The staff member types `registration.jkp.internal`. The Internal DNS resolves this locally. The request hits the Edge Web Server securely over the VPN. 
-2. **The Authentication (SuperTokens):** The user authenticates via the application-specific SuperTokens UI. Their browser receives a secure JWT (JSON Web Token) which is attached to all subsequent requests.
+2. **The Authentication (Keycloak):** The user authenticates via the Keycloak SSO login page. Their browser receives a secure JWT (JSON Web Token) which is attached to all subsequent requests.
 3. **The Translator (grpc-web Proxy):** Browsers can't speak native gRPC. The proxy catches the `grpc-web` formatted request, strips away the browser-specific wrappers, and extracts the raw binary protobuf payload.
-4. **The Brain (Backend gRPC Server):** The native gRPC server deserializes the payload, validates the SuperTokens JWT, applies business rules, and sends a cross-server SQL command to the Storage Node.
+4. **The Brain (Backend gRPC Server):** The native gRPC server deserializes the payload, validates the Keycloak JWT, applies business rules, and sends a cross-server SQL command to the Storage Node.
 5. **Direct Media Upload (MinIO):** If the user uploads a photo, the Compute Node generates a Pre-Signed URL. The browser uses this URL to upload the 1MB photo *directly* to the MinIO container on the Storage Node, bypassing the Python backend entirely to save CPU cycles.
 6. **The Backup:** Periodically, the database and MinIO volumes on the Storage Node are safely snapshotted/synced to a tertiary internal server to prevent data loss.
 

@@ -87,17 +87,26 @@ Treat the database purely as an attached resource accessible via a standardized 
 
 ---
 
-## 6. Authentication (Self-Hosted Identity Provider)
+## 6. Authentication (Centralized SSO via Keycloak)
 
-> **TL;DR:** To securely authenticate the 100-200 staff members without writing a custom, potentially insecure login system, we will deploy a self-hosted open-source identity provider (like SuperTokens or Logto) strictly for this application in Phase 1.
+> **TL;DR:** To securely authenticate the 100-200 staff members and establish a foundation for all future organization applications, we will deploy **Keycloak** as our self-hosted Identity Provider.
 
 **The Context & Motivation:**
-Building custom authentication (password hashing, session cookies, password resets) from scratch is a significant security risk and time sink. We need a secure way to manage our 100-200 users. While we eventually want a centralized SSO for all company apps, we are scoping this strictly to this application for Phase 1.
+Building custom authentication (password hashing, session cookies, password resets) from scratch is a significant security risk and time sink. We need a secure, self-hosted way to manage our 100-200 users. Because the organization plans to roll out more internal applications in the future, we need an Identity Provider capable of acting as a true Single Sign-On (SSO) hub.
 
 **The Architecture Choice:**
-We will deploy **SuperTokens** (or Logto) in a Docker container alongside our application.
-- **Why it makes sense:** It keeps all user data strictly within our internal network, avoids public cloud dependencies, and removes the burden of maintaining custom login code. When the organization is ready, this instance can be scaled into a centralized Identity Provider.
-- **Future Public Registration:** For Phase 2 (public self-registration), we plan to use a Firebase OTP mechanism. This allows end-users to verify their identity via SMS without needing a persistent account or password, while avoiding hard dependencies on Cloudflare.
+We will deploy **Keycloak** (maintained by Red Hat) in a Docker container alongside our application.
+
+We evaluated several alternatives before selecting Keycloak:
+- *SuperTokens:* Excellent developer framework, but primarily designed to secure a single app. Building a centralized SSO hub for other apps requires too much custom code.
+- *Logto / Zitadel:* Excellent modern IdPs, but many of their advanced multi-tenant and enterprise SSO features are locked behind paid tiers or enterprise licenses.
+
+**Why Keycloak wins for us:**
+1. **100% Free & Open Source:** There are no paid enterprise tiers, no user limits, and no paywalls for advanced features (like SAML or identity brokering).
+2. **Industry Standard SSO:** It natively supports standard OIDC (OpenID Connect) and SAML protocols. When the organization builds a second app next year, it can connect to this Keycloak instance with zero additional licensing costs.
+3. **No-Code Management:** The entire user directory, password reset flows, and application clients are managed visually through the Keycloak Admin Console.
+
+- **Future Public Registration:** For Phase 2 (public self-registration), we plan to use a Firebase OTP mechanism. This allows end-users to verify their identity via SMS without needing a persistent account or password in Keycloak.
 
 ---
 
