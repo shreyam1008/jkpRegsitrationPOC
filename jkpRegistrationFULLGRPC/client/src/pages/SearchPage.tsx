@@ -1,37 +1,60 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { searchSatsangis, listSatsangis, type Satsangi } from '../api'
 import { clsx } from 'clsx'
 import {
   Search, UserPlus, AlertCircle, Users, Phone, MapPin,
-  ChevronRight, BadgeCheck, Home, Ban, Sparkles,
+  ChevronRight, BadgeCheck, Home, Ban, Sparkles, Loader2,
 } from 'lucide-react'
+
+const PAGE_SIZE = 20
 
 export default function SearchPage() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Satsangi[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+
+  const isSearching = query.trim().length > 0
+  const hasMore = !isSearching && results.length < totalCount
 
   useEffect(() => {
     const timer = setTimeout(async () => {
       setLoading(true)
       setError('')
       try {
-        const data = query.trim()
+        const data = isSearching
           ? await searchSatsangis(query)
-          : await listSatsangis(50)
-        setResults(data)
+          : await listSatsangis(PAGE_SIZE, 0)
+        setResults(data.satsangis)
+        setTotalCount(data.totalCount)
       } catch {
         setResults([])
+        setTotalCount(0)
         setError('Failed to fetch results. Is the server running?')
       } finally {
         setLoading(false)
       }
     }, 250)
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, isSearching])
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const data = await listSatsangis(PAGE_SIZE, results.length)
+      setResults((prev) => [...prev, ...data.satsangis])
+      setTotalCount(data.totalCount)
+    } catch {
+      setError('Failed to load more results.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, results.length])
 
   return (
     <div className="space-y-5">
@@ -40,7 +63,9 @@ export default function SearchPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">Devotees</h1>
           <p className="mt-0.5 text-[13px] text-gray-400">
-            {!loading && !error ? `${results.length} registered` : 'Loading...'}
+            {!loading && !error
+              ? `${totalCount} registered${isSearching ? ` \u00b7 ${results.length} matched` : ''}`
+              : 'Loading\u2026'}
           </p>
         </div>
         <button
@@ -61,7 +86,7 @@ export default function SearchPage() {
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           type="search"
-          placeholder="Search by name, phone, email, ID, city..."
+          placeholder="Search by name, phone, email, ID, city\u2026"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoFocus
@@ -128,6 +153,28 @@ export default function SearchPage() {
               onClick={() => navigate(`/profile/${s.satsangiId}`, { state: { satsangi: s } })}
             />
           ))}
+
+          {/* Load More */}
+          {hasMore && (
+            <div className="pt-2 text-center">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className={clsx(
+                  'inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5',
+                  'text-sm font-semibold text-gray-600 hover:border-gray-300 hover:bg-gray-50',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'transition-all duration-200',
+                )}
+              >
+                {loadingMore ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Loading&hellip;</>
+                ) : (
+                  <>Load More ({results.length} of {totalCount})</>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

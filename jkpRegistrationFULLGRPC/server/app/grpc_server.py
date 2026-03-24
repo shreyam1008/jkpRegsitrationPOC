@@ -118,9 +118,10 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
         context: grpc.ServicerContext,
     ) -> satsangi_pb2.SatsangiList:
         try:
-            results = store.search_satsangis(request.query)
+            results, total = store.search_satsangis(request.query)
             return satsangi_pb2.SatsangiList(
-                satsangis=[_model_to_proto(s) for s in results]
+                satsangis=[_model_to_proto(s) for s in results],
+                total_count=total,
             )
         except Exception as e:
             logger.exception("SearchSatsangis failed")
@@ -135,9 +136,11 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
     ) -> satsangi_pb2.SatsangiList:
         try:
             limit = request.limit if request.limit > 0 else 0
-            results = store.get_all_satsangis(limit=limit)
+            offset = request.offset if request.offset > 0 else 0
+            results, total = store.get_all_satsangis(limit=limit, offset=offset)
             return satsangi_pb2.SatsangiList(
-                satsangis=[_model_to_proto(s) for s in results]
+                satsangis=[_model_to_proto(s) for s in results],
+                total_count=total,
             )
         except Exception as e:
             logger.exception("ListSatsangis failed")

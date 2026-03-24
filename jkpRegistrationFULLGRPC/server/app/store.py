@@ -64,6 +64,7 @@ _SEARCH_SQL = f"""
 """
 
 _LIST_SQL = f"SELECT {_COLS} FROM satsangis ORDER BY created_at DESC"
+_COUNT_SQL = "SELECT COUNT(*) FROM satsangis"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,8 +97,8 @@ def create_satsangi(data: SatsangiCreate) -> Satsangi:
         return _row_to_satsangi(row)
 
 
-def search_satsangis(query: str) -> list[Satsangi]:
-    """Search satsangis using ILIKE across multiple fields."""
+def search_satsangis(query: str) -> tuple[list[Satsangi], int]:
+    """Search satsangis using ILIKE across multiple fields. Returns (results, total_count)."""
     if not query.strip():
         return get_all_satsangis()
 
@@ -108,19 +109,26 @@ def search_satsangis(query: str) -> list[Satsangi]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(_SEARCH_SQL, params)
             rows = cur.fetchall()
-        return [_row_to_satsangi(row) for row in rows]
+        results = [_row_to_satsangi(row) for row in rows]
+        return results, len(results)
 
 
-def get_all_satsangis(limit: int = 0) -> list[Satsangi]:
-    """Return satsangis, newest first. If limit > 0, return only that many."""
-    sql = _LIST_SQL
-    params: list[Any] = []
-    if limit > 0:
-        sql += " LIMIT %s"
-        params.append(limit)
-
+def get_all_satsangis(limit: int = 0, offset: int = 0) -> tuple[list[Satsangi], int]:
+    """Return satsangis, newest first. Returns (results, total_count)."""
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(_COUNT_SQL)
+            total = cur.fetchone()["count"]
+
+            sql = _LIST_SQL
+            params: list[Any] = []
+            if limit > 0:
+                sql += " LIMIT %s"
+                params.append(limit)
+            if offset > 0:
+                sql += " OFFSET %s"
+                params.append(offset)
+
             cur.execute(sql, params)
             rows = cur.fetchall()
-        return [_row_to_satsangi(row) for row in rows]
+        return [_row_to_satsangi(row) for row in rows], total

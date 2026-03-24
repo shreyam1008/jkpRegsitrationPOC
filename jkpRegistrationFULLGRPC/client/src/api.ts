@@ -8,7 +8,6 @@
  *   Browser  --grpc-web-->  Proxy (:8080)  --gRPC-->  Server (:50051)  --SQL-->  PostgreSQL
  */
 
-import type { MessageInit } from '@bufbuild/protobuf'
 import { createClient } from '@connectrpc/connect'
 import { createGrpcWebTransport } from '@connectrpc/connect-web'
 import { SatsangiService } from './generated/satsangi_pb'
@@ -35,8 +34,8 @@ export type { Satsangi, SatsangiCreate }
 // ---------------------------------------------------------------------------
 
 /** Require the 3 mandatory fields; everything else is optional. */
-type CreateInput = { firstName: string; lastName: string; phoneNumber: string } &
-  Omit<MessageInit<SatsangiCreate>, 'firstName' | 'lastName' | 'phoneNumber' | '$typeName' | '$unknown'>
+type CreateInput = Pick<SatsangiCreate, 'firstName' | 'lastName' | 'phoneNumber'> &
+  Partial<Omit<SatsangiCreate, 'firstName' | 'lastName' | 'phoneNumber' | '$typeName' | '$unknown'>>
 
 export async function createSatsangi(data: CreateInput): Promise<Satsangi> {
   return await client.createSatsangi({
@@ -50,17 +49,22 @@ export async function createSatsangi(data: CreateInput): Promise<Satsangi> {
   })
 }
 
-export async function listSatsangis(limit: number = 50): Promise<Satsangi[]> {
-  const result = await client.listSatsangis({ limit })
-  return result.satsangis
+export interface PaginatedResult {
+  satsangis: Satsangi[]
+  totalCount: number
 }
 
-export async function searchSatsangis(query: string): Promise<Satsangi[]> {
+export async function listSatsangis(limit: number = 20, offset: number = 0): Promise<PaginatedResult> {
+  const result = await client.listSatsangis({ limit, offset })
+  return { satsangis: result.satsangis, totalCount: result.totalCount }
+}
+
+export async function searchSatsangis(query: string): Promise<PaginatedResult> {
   if (query.trim()) {
     const result = await client.searchSatsangis({ query })
-    return result.satsangis
+    return { satsangis: result.satsangis, totalCount: result.totalCount }
   }
-  return listSatsangis(50)
+  return listSatsangis(20)
 }
 
 export async function healthCheck(): Promise<HealthResponse> {

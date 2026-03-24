@@ -79,11 +79,13 @@ message SearchRequest {
 }
 
 message ListRequest {
-  int32 limit = 1;
+  int32 limit  = 1;
+  int32 offset = 2;
 }
 
 message SatsangiList {
   repeated Satsangi satsangis = 1;
+  int32 total_count            = 2;
 }
 
 message Empty {}

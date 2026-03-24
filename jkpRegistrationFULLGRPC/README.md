@@ -1,6 +1,6 @@
 # JKP Satsangi Registration — Full gRPC + PostgreSQL
 
-> A type-safe, end-to-end gRPC registration system.
+> A type-safe, end-to-end gRPC registration system with authentication and pagination.
 > One `.proto` file defines the entire API — types flow automatically to both
 > the Python backend and the React frontend. No REST, no hand-written DTOs.
 
@@ -10,15 +10,16 @@
 
 1. [Key Concepts](#key-concepts)
 2. [Tech Stack](#tech-stack)
-3. [Architecture Overview](#architecture-overview)
-4. [How Everything Connects](#how-everything-connects)
-5. [Server Layers](#server-layers--what-each-does)
-6. [Frontend](#frontend)
-7. [Project Structure](#project-structure)
-8. [Development](#development)
-9. [Tutorial: Adding a New RPC End-to-End](#tutorial-adding-a-new-rpc-end-to-end)
-10. [Hosting & Deployment](#hosting--deployment)
-11. [Production Readiness](#production-readiness)
+3. [Features](#features)
+4. [Architecture Overview](#architecture-overview)
+5. [How Everything Connects](#how-everything-connects)
+6. [Server Layers](#server-layers--what-each-does)
+7. [Frontend](#frontend)
+8. [Project Structure](#project-structure)
+9. [Development](#development)
+10. [Tutorial: Adding a New RPC End-to-End](#tutorial-adding-a-new-rpc-end-to-end)
+11. [Hosting & Deployment](#hosting--deployment)
+12. [Production Readiness](#production-readiness)
 
 ---
 
@@ -69,6 +70,7 @@ You never write request/response types by hand.
 | **API contract** | Protobuf 3 + buf | Single `.proto` → generated code for both sides |
 | **Frontend** | React 19, Vite 8, Bun, TailwindCSS 4 | Modern SPA with fast builds |
 | **Frontend ↔ Backend** | ConnectRPC (grpc-web) | Typed gRPC calls from the browser |
+| **Auth** | Client-side context + localStorage | POC-level login gate (admin role) |
 | **Proxy** | FastAPI + uvicorn | Async grpc-web → gRPC translation |
 | **Backend** | grpcio (Python gRPC server) | ThreadPoolExecutor, reflection, proto stubs |
 | **Data models** | Pydantic v2 | Validation, serialization, defaults |
@@ -76,6 +78,37 @@ You never write request/response types by hand.
 | **Reverse proxy** | Caddy 2 | Auto-TLS, HTTP/3, static files, security headers |
 | **Deployment** | Docker Compose (multi-stage) | 3 containers: server, Caddy, tunnel |
 | **Internet exposure** | Cloudflare Tunnel | Zero open ports, hidden IP |
+
+---
+
+## Features
+
+### Authentication
+- **Dummy login** — username: `admin`, password: `admin123`, role: `admin`
+- Client-side auth context (`auth.tsx`) with `localStorage` persistence
+- Protected routes — unauthenticated users redirect to `/login`
+- Sidebar shows logged-in user + role with logout button
+- Logout clears session → login screen
+
+### Load More Pagination
+- **"Load More" button** — not page numbers
+- Default page size: **20 records**
+- `ListRequest` proto has `limit` + `offset`; `SatsangiList` includes `total_count`
+- Button shows "Load More (20 of 150)" and hides when all loaded
+- Search results return all matches (no pagination on search)
+
+### Search
+- Debounced (250ms) full-text ILIKE across 12 fields
+- Search by: name, phone, email, ID, city, pincode, PAN, govt ID, etc.
+
+### Registration Form
+- Two-column sectioned cards (Personal, Address, Govt ID, Visit, Documents)
+- react-hook-form + zod validation, photo upload preview
+- Success → auto-redirect to search after 2s
+
+### Profile View
+- Compact hero with avatar, badges, key info
+- Two-column detail cards, placeholder Visit/Document sections
 
 ---
 
@@ -205,7 +238,7 @@ The actual business logic. Standard `grpc.server` with `ThreadPoolExecutor(10)`.
 |-----|-------|--------|-------------|
 | `CreateSatsangi` | `SatsangiCreate` | `Satsangi` | Register new satsangi (8-char UUID) |
 | `SearchSatsangis` | `SearchRequest` | `SatsangiList` | ILIKE across 12 fields |
-| `ListSatsangis` | `ListRequest` | `SatsangiList` | Latest N (default all) |
+| `ListSatsangis` | `ListRequest` | `SatsangiList` | Paginated list (limit + offset) + total_count |
 | `Health` | `HealthRequest` | `HealthResponse` | DB connectivity + timestamp |
 
 **gRPC reflection** is enabled — `grpcurl`, `grpcui`, and Postman can discover
@@ -230,22 +263,41 @@ the API without the `.proto` file.
 
 | Stack | Detail |
 |-------|--------|
-| React 19 | SPA with React Router 7 (Search, Create, Profile pages) |
+| React 19 | SPA with React Router 7 (Login, Search, Create, Profile) |
 | ConnectRPC | `@connectrpc/connect-web` — typed gRPC-web client |
 | Protobuf | `@bufbuild/protobuf` — auto-generated from `satsangi.proto` |
+| Auth | Client-side context (`auth.tsx`) + localStorage + protected routes |
 | Styling | TailwindCSS 4, lucide-react icons, clsx |
 | Forms | react-hook-form + zod validation |
 | Build | Vite 8 + Bun |
 
-The entire client API layer is in `client/src/api.ts` — 4 exported functions,
-all fully typed from the generated proto code. No hand-written request/response types.
+### Pages
+
+| Page | Route | Description |
+|------|-------|-------------|
+| **LoginPage** | `/login` | Username/password form (admin/admin123) |
+| **SearchPage** | `/search` | Debounced search + paginated list with "Load More" |
+| **CreatePage** | `/create` | Multi-section registration form with validation |
+| **ProfilePage** | `/profile/:id` | Read-only detail view with badges |
+
+### API Layer
 
 ```
 client/src/api.ts
-  ├── createSatsangi(data)   → Satsangi
-  ├── searchSatsangis(query) → Satsangi[]
-  ├── listSatsangis(limit)   → Satsangi[]
-  └── healthCheck()          → HealthResponse
+  ├── createSatsangi(data)          → Satsangi
+  ├── searchSatsangis(query)        → { satsangis, totalCount }
+  ├── listSatsangis(limit, offset)  → { satsangis, totalCount }
+  └── healthCheck()                 → HealthResponse
+```
+
+### Auth Flow
+
+```
+client/src/auth.tsx
+  ├── AuthProvider        — wraps app, manages user state in localStorage
+  ├── useAuth()           — returns { user, login, logout }
+  ├── login(u, p)         — validates admin/admin123, stores session
+  └── logout()            — clears localStorage, redirects to /login
 ```
 
 ---
@@ -270,9 +322,15 @@ jkpRegistrationFULLGRPC/
 ├── client/
 │   ├── src/
 │   │   ├── api.ts                  ← ConnectRPC client — ADD NEW CLIENT FUNCTIONS HERE
+│   │   ├── auth.tsx                ← Auth context + useAuth hook (POC dummy login)
+│   │   ├── App.tsx                 ← Router + protected routes
 │   │   ├── generated/              ← AUTO-GENERATED — never edit by hand
-│   │   ├── pages/                  ← React pages — ADD NEW UI HERE
-│   │   └── components/             ← Reusable UI components
+│   │   ├── pages/
+│   │   │   ├── LoginPage.tsx       ← Login form (admin/admin123)
+│   │   │   ├── SearchPage.tsx      ← Paginated list + search + "Load More"
+│   │   │   ├── CreatePage.tsx      ← Registration form (react-hook-form + zod)
+│   │   │   └── ProfilePage.tsx     ← Read-only detail view
+│   │   └── components/             ← Reusable UI components (Sidebar, etc.)
 │   └── package.json
 ├── docker/
 │   ├── server/Dockerfile           ← multi-stage (uv build → python:3.12-slim)
@@ -662,6 +720,8 @@ Zero exposed ports, server IP hidden:
 
 ### What's solid now
 - **Type safety end-to-end** — proto → generated stubs → no drift
+- **Authentication** — POC login gate with admin role, protected routes, logout
+- **Pagination** — "Load More" with offset/limit, total count display
 - **Async proxy** — `grpc.aio` channel, non-blocking event loop
 - **DB resilience** — startup retry, stale conn detection, pool auto-recreate
 - **Security** — Caddy handles TLS, security headers (CSP/HSTS/X-Frame), CORS locked to POST+OPTIONS
@@ -669,9 +729,9 @@ Zero exposed ports, server IP hidden:
 - **Reflection** — introspect API with grpcurl/Postman without `.proto` file
 
 ### For scaling beyond POC
+- **Real auth** — JWT/session tokens validated at the proxy layer (replace dummy login)
 - **Multiple uvicorn workers** — requires moving gRPC server to a separate process/container (avoids :50051 port clash)
 - **Async DB driver** — switch from psycopg2 to psycopg v3 async if moving gRPC server to `grpc.aio`
 - **Observability** — add OpenTelemetry tracing, structured logging, Prometheus metrics
 - **Rate limiting** — Caddy `rate_limit` directive or Cloudflare WAF rules
-- **Auth** — JWT/session tokens validated at the proxy layer
 - **CI/CD** — automated proto generation check, Docker image build, deploy pipeline

@@ -149,16 +149,20 @@ class SearchRequest(_message.Message):
     def __init__(self, query: _Optional[str] = ...) -> None: ...
 
 class ListRequest(_message.Message):
-    __slots__ = ("limit",)
+    __slots__ = ("limit", "offset")
     LIMIT_FIELD_NUMBER: _ClassVar[int]
+    OFFSET_FIELD_NUMBER: _ClassVar[int]
     limit: int
-    def __init__(self, limit: _Optional[int] = ...) -> None: ...
+    offset: int
+    def __init__(self, limit: _Optional[int] = ..., offset: _Optional[int] = ...) -> None: ...
 
 class SatsangiList(_message.Message):
-    __slots__ = ("satsangis",)
+    __slots__ = ("satsangis", "total_count")
     SATSANGIS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_COUNT_FIELD_NUMBER: _ClassVar[int]
     satsangis: _containers.RepeatedCompositeFieldContainer[Satsangi]
-    def __init__(self, satsangis: _Optional[_Iterable[_Union[Satsangi, _Mapping]]] = ...) -> None: ...
+    total_count: int
+    def __init__(self, satsangis: _Optional[_Iterable[_Union[Satsangi, _Mapping]]] = ..., total_count: _Optional[int] = ...) -> None: ...
 
 class Empty(_message.Message):
     __slots__ = ()

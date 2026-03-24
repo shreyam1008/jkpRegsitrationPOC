@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from 'react-router'
 import { clsx } from 'clsx'
 import {
-  Search, UserPlus, X, Menu, Activity, Database, LayoutDashboard,
+  Search, UserPlus, X, Menu, Activity, Database, LogOut, Shield,
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { healthCheck } from '../../api'
+import { useAuth } from '../../auth'
 
 const NAV_ITEMS = [
   { to: '/search', label: 'Search', icon: Search, desc: 'Find devotees' },
@@ -12,6 +13,7 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar() {
+  const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const [health, setHealth] = useState<{ status: string; dbStatus: string; timestamp: string } | null>(null)
@@ -137,11 +139,23 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-gray-100 px-5 py-3.5">
-          <div className="flex items-center gap-2 text-[10px] text-gray-300">
-            <LayoutDashboard className="h-3 w-3" />
-            <span>v2.0 &middot; gRPC + PostgreSQL</span>
+        {/* User + Logout */}
+        <div className="border-t border-gray-100 px-4 py-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <Shield className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold text-gray-700 truncate">{user?.username}</div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wider">{user?.role}</div>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </aside>
