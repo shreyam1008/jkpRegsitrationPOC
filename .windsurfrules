@@ -1,0 +1,14 @@
+# JKP Registration POC - AI Assistant Rules
+
+You are assisting with the JKP Registration POC. 
+You must strictly adhere to the project's coding standards, architectural boundaries, and technology stack.
+
+Instead of duplicating the rules here, you MUST read the comprehensive guidelines document before writing or modifying any code for this project:
+
+**Location of Rules:** `@docs/design/005-coding-standards.md`
+
+Always refer to the above file for constraints regarding:
+- Allowed dependencies and framework versions (React/FastAPI/gRPC).
+- TypeScript strictness and state management.
+- Python formatting, connection pooling, and queueing requirements.
+- The separation of gRPC and FastAPI boundaries.
