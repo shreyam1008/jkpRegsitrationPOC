@@ -9,17 +9,10 @@
 # Architecture (3 containers):
 #   app.yourdomain.com  →  client (Caddy file_server /srv)  — built React SPA
 #   api.yourdomain.com  →  client (Caddy reverse_proxy)     →  server:8080 (grpc-web proxy → gRPC :50051)
-#   tunnel              →  cloudflared (Cloudflare Tunnel)   →  client:443 (bypasses firewall, hides IP)
+#   tunnel              →  cloudflared (Cloudflare Tunnel)   →  client:443 (bypasses firewall, hides IP) TO USE IF WE EXPOSE THIS TO INTERNET
 #
-# ── Exposing to the internet (pick one) ──────────────────────
-#
-#   Option A — Traditional (direct IP):
-#     1. Open ports 80/443 on your firewall/router
-#     2. Point A records (app.yourdomain.com, api.yourdomain.com) to your public IP
-#     3. Remove "tls internal" from Caddyfile → Caddy auto-fetches Let's Encrypt certs
-#     4. The tunnel service is not needed — stop/remove it
-#
-#   Option B — Cloudflare Tunnel (zero exposed ports, IP hidden):
+# ── Exposing to the internet ──────────────────────
+#     Cloudflare Tunnel (zero exposed ports, IP hidden):
 #     1. No firewall/port changes needed
 #     2. Create a tunnel in Cloudflare Zero Trust dashboard → get a token
 #     3. Set the token in the tunnel service below

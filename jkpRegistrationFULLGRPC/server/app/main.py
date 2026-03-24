@@ -12,7 +12,8 @@ Architecture:
   PostgreSQL
 
 Performance notes:
-  • Singleton gRPC channel — one TCP conn, HTTP/2 multiplexes all RPCs
+  • Async gRPC channel (grpc.aio) — non-blocking, never stalls the event loop
+  • Singleton channel — one TCP conn, HTTP/2 multiplexes all RPCs
   • DB connection pool — 2–20 conns, zero connect overhead per request
   • Pre-built OK trailer — allocated once, reused every successful response
   • Identity serializers — no copy, pass raw protobuf bytes through
@@ -28,6 +29,7 @@ import struct
 from collections.abc import AsyncIterator
 
 import grpc
+import grpc.aio
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -50,16 +52,17 @@ def _identity(x: bytes) -> bytes:
     return x
 
 # ---------------------------------------------------------------------------
-# Singleton gRPC channel — created once, reused for every request.
+# Singleton async gRPC channel — created once, reused for every request.
+# Non-blocking: never stalls the uvicorn event loop.
 # ---------------------------------------------------------------------------
 
-_channel: grpc.Channel | None = None
+_channel: grpc.aio.Channel | None = None
 
 
-def _get_channel() -> grpc.Channel:  # noqa: RUF036
+def _get_channel() -> grpc.aio.Channel:
     global _channel
     if _channel is None:
-        _channel = grpc.insecure_channel(
+        _channel = grpc.aio.insecure_channel(
             GRPC_TARGET,
             options=[
                 ("grpc.keepalive_time_ms", 30_000),
@@ -88,7 +91,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if _grpc_server:
         _grpc_server.stop(grace=2)
     if _channel:
-        _channel.close()
+        await _channel.close()
         _channel = None
     close_pool()
 
@@ -125,7 +128,7 @@ def _encode_data_frame(payload: bytes) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Health check — Caddy polls this to verify the backend is alive
+# Health check — Caddy/DOCKER/OTHER SERVICES polls this to verify the backend is alive
 # ---------------------------------------------------------------------------
 
 @app.get("/healthz")
@@ -158,7 +161,7 @@ async def grpc_web_proxy(service_path: str, request: Request) -> Response:
 
     channel = _get_channel()
     try:
-        response_bytes = channel.unary_unary(
+        response_bytes = await channel.unary_unary(
             f"/{service_path}",
             request_serializer=_identity,
             response_deserializer=_identity,
