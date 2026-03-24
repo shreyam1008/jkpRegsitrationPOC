@@ -22,4 +22,5 @@ client/dist/
 
 # Not needed at runtime
 proto/
+tests/
 *.md

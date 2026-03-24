@@ -1,0 +1,4 @@
+httpx>=0.28
+grpcio>=1.78
+protobuf>=6.33
+pytest>=8.0
