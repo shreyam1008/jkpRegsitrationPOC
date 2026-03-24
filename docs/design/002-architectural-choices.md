@@ -248,7 +248,11 @@ Certain tasks take too long to run synchronously within an HTTP/gRPC request. Fo
 1. Exporting 50,000 user records to a CSV file for reporting.
 2. The initial one-time ETL migration of 200,000 legacy records.
 3. Sending out bulk SMS OTPs or notifications.
-If the Python gRPC server tries to do this while the user's browser waits, the connection will time out, and the server will be blocked from handling other staff members.
+
+Running these tasks synchronously directly inside the web server creates three critical points of failure:
+- **Python Concurrency Limits (GIL & Multiprocessing):** Unlike C++, where threads can run in parallel on shared memory across multiple CPU cores, Python's Global Interpreter Lock (GIL) restricts execution to one thread per process. While web servers use multi-processing (e.g., 4 worker processes mapped to 4 CPU cores) to bypass the GIL, a heavy task will pin a process at 100% CPU. If 4 staff members request a large export simultaneously, the entire process pool is exhausted. A 5th user attempting to simply load the dashboard will be completely blocked until an export finishes.
+- **Resource Starvation:** Large synchronous tasks often require loading massive datasets into RAM before serialization, potentially triggering the OS OOM (Out Of Memory) killer and crashing the web node entirely.
+- **Browser & Proxy Timeouts:** Even if the server had infinite CPU cores and processes, web browsers, gRPC proxies, and load balancers structurally distrust the network and enforce strict timeouts (typically 30-60 seconds). A 3-minute synchronous task will result in a proactively severed connection, presenting a failure to the user even if the server continues working.
 
 **The Architecture Choice:**
 We will implement a **Background Task Queue** in the Compute Node.

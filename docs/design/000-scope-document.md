@@ -12,7 +12,7 @@ This document outlines the scope, target audience, and feature boundaries for th
 The primary objective of Phase 1 is to replace legacy systems with a modern, fast, and type-safe registration flow.
 
 **In-Scope:**
-- Responsive Web Application (React) accessible via PC and Mobile browsers.
+- Responsive Web Application (React) accessible via PC browsers.
 - Multi-step registration workflow for new Satsangis.
 - Form C data capture and document storage specifically for the registration of foreign nationals.
 - Centralized organization-wide authentication using a self-hosted identity provider (Keycloak), establishing the foundation for SSO across all future internal apps.
