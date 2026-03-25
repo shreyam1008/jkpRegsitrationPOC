@@ -3,8 +3,8 @@
 # ============================================================
 #
 # Architecture (no nginx — Caddy serves static files directly):
-#   app.yourdomain.com  →  /srv (built React SPA)
-#   api.yourdomain.com  →  server:8080 (grpc-web proxy)
+#   registrationpoc.shreyam1008.com.np     →  /srv (built React SPA)
+#   registrationpocapi.shreyam1008.com.np  →  server:8080 (grpc-web proxy)
 #
 # TLS mode:
 #   Default uses Caddy's internal CA (self-signed). Works immediately
@@ -17,8 +17,8 @@
 #   3. Set CLOUDFLARE_API_TOKEN env var (or your DNS provider)
 #
 # Domains:
-#   Replace app.yourdomain.com / api.yourdomain.com with your
-#   actual domain. Point both A records to the server's LAN IP.
+#   On LAN/VPN: point both domains to the server's LAN IP (local DNS or /etc/hosts).
+#   On Internet: Cloudflare Tunnel handles routing (see docker-compose.yml).
 # ============================================================
 
 {
@@ -26,7 +26,7 @@
 	admin off
 
 	# Uncomment for Let's Encrypt via DNS challenge:
-	# email admin@yourdomain.com
+	# email admin@shreyam1008.com.np
 	# acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 }
 
@@ -39,17 +39,15 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.yourdomain.com"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://registrationpocapi.shreyam1008.com.np"
 		# Hide server identity
 		-Server
 		-X-Powered-By
 	}
 }
 
-# ─── Frontend (static React SPA — served directly by Caddy) ──
-app.yourdomain.com {
-	tls internal
-
+# ─── Shared snippet: frontend (SPA) ──────────────────────────
+(frontend) {
 	encode zstd gzip
 
 	import security_headers
@@ -65,10 +63,8 @@ app.yourdomain.com {
 	file_server
 }
 
-# ─── Backend API (grpc-web proxy → gRPC server) ──────────────
-api.yourdomain.com {
-	tls internal
-
+# ─── Shared snippet: backend API (grpc-web proxy) ────────────
+(backend) {
 	encode zstd gzip
 
 	import security_headers
@@ -93,4 +89,24 @@ api.yourdomain.com {
 	request_body {
 		max_size 16MB
 	}
+}
+
+# ─── HTTPS (LAN / VPN — self-signed cert, direct access) ─────
+reg.jkp.com {
+	tls internal
+	import frontend
+}
+
+regapi.jkp.com {
+	tls internal
+	import backend
+}
+
+# ─── HTTP (Cloudflare Tunnel — no TLS needed internally) ─────
+http://registrationpoc.shreyam1008.com.np {
+	import frontend
+}
+
+http://registrationpocapi.shreyam1008.com.np {
+	import backend
 }

@@ -48,3 +48,4 @@ bun.lockb
 
 # uv
 uv.lock
+jkpRegistrationFULLGRPC/client/.env

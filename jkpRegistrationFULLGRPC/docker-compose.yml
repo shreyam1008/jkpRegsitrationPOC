@@ -7,20 +7,22 @@
 # Backend connects to DB at the IP hardcoded in docker/server/Dockerfile
 #
 # Architecture (3 containers):
-#   app.yourdomain.com  →  client (Caddy file_server /srv)  — built React SPA
-#   api.yourdomain.com  →  client (Caddy reverse_proxy)     →  server:8080 (grpc-web proxy → gRPC :50051)
-#   tunnel              →  cloudflared (Cloudflare Tunnel)   →  client:443 (bypasses firewall, hides IP) TO USE IF WE EXPOSE THIS TO INTERNET
+#   registrationpoc.shreyam1008.com.np    →  client (Caddy /srv)         — React SPA
+#   registrationpocapi.shreyam1008.com.np →  client (Caddy reverse_proxy) → server:8080
+#   tunnel (optional)                     →  cloudflared → client:443    — internet access
+#
+# ── LAN / VPN (default) ──────────────────────────
+#     Point both domains to the server's LAN IP (local DNS or /etc/hosts).
+#     Access via https://registrationpoc.shreyam1008.com.np (self-signed cert warning).
+#     Tunnel service can be stopped or removed.
 #
 # ── Exposing to the internet ──────────────────────
-#     Cloudflare Tunnel (zero exposed ports, IP hidden):
-#     1. No firewall/port changes needed
-#     2. Create a tunnel in Cloudflare Zero Trust dashboard → get a token
-#     3. Set the token in the tunnel service below
-#     4. In the CF dashboard, map app.yourdomain.com → https://client:443
-#        and api.yourdomain.com → https://client:443
-#     5. Keep "tls internal" in Caddyfile — CF terminates public TLS,
-#        cloudflared trusts the internal cert to Caddy over the tunnel
-#     6. Ports 80/443 on the host are optional (only needed for LAN access)
+#     1. Start the tunnel service (already defined below)
+#     2. In CF Zero Trust dashboard, map BOTH domains to http://client:80
+#        - registrationpoc.shreyam1008.com.np    → http://client:80
+#        - registrationpocapi.shreyam1008.com.np → http://client:80
+#     3. That's it — CF terminates public TLS, tunnel talks plain HTTP to Caddy
+#        (Caddy has explicit http:// blocks that serve without redirect)
 
 services:
   server:
@@ -55,7 +57,7 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate run --token eyJhIjoiNjEyZmQ0MjlmNzRkODFhMmE5MDZhZGM5NTNhNGQ0M2EiLCJ0IjoiMjYyYjlmZTUtNjRjOS00ZDUyLTgzNjctYjc5ZDJiN2EyNWVmIiwicyI6Ik9EY3dZell5TlRNdFkyVTNPQzAwTnpBNUxXSmpaV1l0TlROaVpUaGtOV0k0TURnMSJ9
     depends_on:
       - client
     deploy:

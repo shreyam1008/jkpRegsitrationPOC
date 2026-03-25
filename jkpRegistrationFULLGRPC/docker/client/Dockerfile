@@ -20,4 +20,5 @@ FROM caddy:2-alpine
 
 COPY --from=builder /build/dist /srv
 
+# 80 for HTTP(taken by cloudfalre and TLS etc added by cloudflare), 443 for HTTPS(caddy adds TLS, for internal consuption only.)
 EXPOSE 80 443

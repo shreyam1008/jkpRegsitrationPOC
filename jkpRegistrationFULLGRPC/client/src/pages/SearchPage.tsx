@@ -14,21 +14,30 @@ export default function SearchPage() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Satsangi[]>([])
   const [totalCount, setTotalCount] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
 
   const isSearching = query.trim().length > 0
   const hasMore = !isSearching && results.length < totalCount
 
   useEffect(() => {
+    if (!isSearching) {
+      setResults([])
+      setTotalCount(0)
+      setHasSearched(false)
+      setLoading(false)
+      setError('')
+      return
+    }
+
     const timer = setTimeout(async () => {
       setLoading(true)
+      setHasSearched(true)
       setError('')
       try {
-        const data = isSearching
-          ? await searchSatsangis(query)
-          : await listSatsangis(PAGE_SIZE, 0)
+        const data = await searchSatsangis(query)
         setResults(data.satsangis)
         setTotalCount(data.totalCount)
       } catch {
@@ -63,9 +72,9 @@ export default function SearchPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">Devotees</h1>
           <p className="mt-0.5 text-[13px] text-gray-400">
-            {!loading && !error
-              ? `${totalCount} registered${isSearching ? ` \u00b7 ${results.length} matched` : ''}`
-              : 'Loading\u2026'}
+            {hasSearched && !loading && !error
+              ? `${totalCount} found${isSearching ? ` · ${results.length} matched` : ''}`
+              : 'Search to find devotees'}
           </p>
         </div>
         <button
@@ -124,8 +133,30 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Empty */}
-      {!loading && results.length === 0 && !error && (
+      {/* Empty State - Initial */}
+      {!hasSearched && !loading && (
+        <div className="py-16 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 border border-brand-100">
+            <Search className="h-8 w-8 text-brand-500" />
+          </div>
+          <h2 className="mt-6 text-lg font-semibold text-gray-900">Search Devotees</h2>
+          <p className="mt-2 text-sm text-gray-400 max-w-sm mx-auto">
+            Enter a search term above to find devotees by name, phone, email, ID, or city
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => navigate('/create')}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition"
+            >
+              <UserPlus className="h-4 w-4" />
+              Register New Devotee
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty - No Results */}
+      {hasSearched && !loading && results.length === 0 && !error && (
         <div className="py-16 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 border border-gray-100">
             <Users className="h-6 w-6 text-gray-400" />
@@ -143,7 +174,7 @@ export default function SearchPage() {
       )}
 
       {/* Results */}
-      {!loading && results.length > 0 && (
+      {hasSearched && !loading && results.length > 0 && (
         <div className="space-y-1.5">
           {results.map((s, i) => (
             <SatsangiRow

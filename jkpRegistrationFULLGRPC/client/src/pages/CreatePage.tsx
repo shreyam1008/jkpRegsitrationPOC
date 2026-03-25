@@ -8,7 +8,7 @@ import { clsx } from 'clsx'
 import {
   User, MapPin, Settings, ArrowLeft, Loader2, CheckCircle2, AlertCircle, Send,
   Phone, Calendar, CreditCard, Globe, Shield, Camera, Check, ChevronDown,
-  FileText, ClipboardList,
+  FileText, ClipboardList, Circle, CheckCircle2 as CheckCircleIcon,
 } from 'lucide-react'
 
 const GENDERS = ['Male', 'Female', 'Other']
@@ -68,6 +68,8 @@ export default function CreatePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [currentStep, setCurrentStep] = useState(1)
+  const totalSteps = 3
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -82,7 +84,7 @@ export default function CreatePage() {
     },
   })
 
-  const { register, handleSubmit, formState: { errors } } = form
+  const { register, handleSubmit, formState: { errors }, trigger } = form
 
   useEffect(() => {
     if (!success) return
@@ -113,6 +115,31 @@ export default function CreatePage() {
     }
   }
 
+  async function nextStep() {
+    const fieldsToValidate = getFieldsForStep(currentStep)
+    const isValid = await trigger(fieldsToValidate)
+    if (isValid) {
+      setCurrentStep(prev => Math.min(prev + 1, totalSteps))
+    }
+  }
+
+  function prevStep() {
+    setCurrentStep(prev => Math.max(prev - 1, 1))
+  }
+
+  function getFieldsForStep(step: number) {
+    switch (step) {
+      case 1:
+        return ['firstName', 'lastName', 'phoneNumber', 'age', 'dateOfBirth', 'pan', 'gender', 'specialCategory', 'nationality', 'nickName', 'introducer', 'printOnCard']
+      case 2:
+        return ['country', 'state', 'address', 'city', 'district', 'pincode', 'govtIdType', 'govtIdNumber', 'idExpiryDate', 'idIssuingCountry']
+      case 3:
+        return ['emergencyContact', 'exCenterSatsangiId', 'email', 'notes', 'dateOfFirstVisit', 'introducedBy', 'hasRoomInAshram', 'firstTimer', 'banned']
+      default:
+        return []
+    }
+  }
+
   function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -122,7 +149,7 @@ export default function CreatePage() {
   }
 
   return (
-    <div>
+    <div className="max-w-none">
       {/* Back */}
       <button
         type="button"
@@ -150,15 +177,64 @@ export default function CreatePage() {
         </div>
       )}
 
+      {/* Progress Bar */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          {[1, 2, 3].map((step) => (
+            <button
+              key={step}
+              onClick={() => step <= currentStep && setCurrentStep(step)}
+              className="flex items-center gap-2"
+              disabled={step > currentStep}
+            >
+              <div className={clsx(
+                'flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold transition-all',
+                step < currentStep
+                  ? 'bg-brand-600 text-white'
+                  : step === currentStep
+                  ? 'bg-brand-100 text-brand-600 border-2 border-brand-600'
+                  : 'bg-gray-100 text-gray-400'
+              )}>
+                {step < currentStep ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  step
+                )}
+              </div>
+              <span className={clsx(
+                'text-sm font-medium',
+                step <= currentStep ? 'text-gray-900' : 'text-gray-400'
+              )}>
+                {step === 1 ? 'Personal' : step === 2 ? 'Address & ID' : 'Visit & Other'}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div className="w-full border-t border-gray-200" />
+          </div>
+          <div className="relative flex justify-between">
+            {[1, 2, 3].map((step) => (
+              <div
+                key={step}
+                className={clsx(
+                  'h-2 flex-1 transition-all duration-300',
+                  step <= currentStep ? 'bg-brand-600' : 'bg-gray-200',
+                  step === 1 && 'rounded-l-full',
+                  step === 3 && 'rounded-r-full'
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Two-column layout: 50/50 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* ── LEFT COLUMN ── */}
+        {/* Step 1: Personal */}
+        {currentStep === 1 && (
           <div className="space-y-6">
-
-            {/* Personal */}
-            <Section icon={User} title="Personal">
+            <Section icon={User} title="Personal Information">
               <Row>
                 <Field label="First Name" error={errors.firstName?.message} required>
                   <input {...register('firstName')} placeholder="Enter first name" className={inputCls(errors.firstName)} />
@@ -214,145 +290,176 @@ export default function CreatePage() {
                 </Field>
               </Row>
             </Section>
-
-            {/* Address */}
-            <Section icon={MapPin} title="Address">
-              <Row>
-                <Field label="Country" error={errors.country?.message} required>
-                  <SelectField register={register('country')} options={COUNTRIES} />
-                </Field>
-                <Field label="State">
-                  <SelectField register={register('state')} options={INDIAN_STATES} />
-                </Field>
-              </Row>
-              <Field label="Street Address" icon={<MapPin className="h-4 w-4" />}>
-                <textarea {...register('address')} rows={3} placeholder="e.g. 271, Sample Apartments, Sec-X" className={inputCls(undefined, true)} />
-              </Field>
-              <Row>
-                <Field label="City / Town">
-                  <input {...register('city')} placeholder="Enter city" className={inputCls()} />
-                </Field>
-                <Field label="District">
-                  <input {...register('district')} placeholder="Enter district" className={inputCls()} />
-                </Field>
-              </Row>
-              <Field label="Pincode">
-                <input {...register('pincode')} placeholder="e.g. 201010" className={inputCls()} />
-              </Field>
-            </Section>
-
-            {/* Gov ID */}
-            <Section icon={Shield} title="Government ID">
-              <Row>
-                <Field label="ID Type">
-                  <SelectField register={register('govtIdType')} options={GOVT_ID_TYPES} />
-                </Field>
-                <Field label="ID Number">
-                  <input {...register('govtIdNumber')} placeholder="Enter ID number" className={inputCls()} />
-                </Field>
-              </Row>
-              <Row>
-                <Field label="Expiry Date">
-                  <input {...register('idExpiryDate')} type="date" className={inputCls()} />
-                </Field>
-                <Field label="Issuing Country">
-                  <SelectField register={register('idIssuingCountry')} options={COUNTRIES} />
-                </Field>
-              </Row>
-            </Section>
-
-            {/* Other */}
-            <Section icon={Settings} title="Other">
-              <Row>
-                <Field label="Emergency Contact" icon={<Phone className="h-4 w-4" />}>
-                  <input {...register('emergencyContact')} type="tel" placeholder="+91 98765 43210" className={inputCls(undefined, true)} />
-                </Field>
-                <Field label="Ex-center Satsangi ID">
-                  <input {...register('exCenterSatsangiId')} placeholder="Enter ID if available" className={inputCls()} />
-                </Field>
-              </Row>
-              <Field label="Email" error={errors.email?.message} icon={<Globe className="h-4 w-4" />}>
-                <input {...register('email')} type="email" placeholder="user@example.com" className={inputCls(errors.email, true)} />
-              </Field>
-              <Field label="Notes">
-                <textarea {...register('notes')} rows={3} placeholder="Any additional notes…" className={inputCls()} />
-              </Field>
-            </Section>
           </div>
+        )}
 
-          {/* ── RIGHT COLUMN ── */}
-          <div className="space-y-6">
+        {/* Step 2: Address & Government ID */}
+        {currentStep === 2 && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <Section icon={MapPin} title="Address">
+                <Row>
+                  <Field label="Country" error={errors.country?.message} required>
+                    <SelectField register={register('country')} options={COUNTRIES} />
+                  </Field>
+                  <Field label="State">
+                    <SelectField register={register('state')} options={INDIAN_STATES} />
+                  </Field>
+                </Row>
+                <Field label="Street Address" icon={<MapPin className="h-4 w-4" />}>
+                  <textarea {...register('address')} rows={3} placeholder="e.g. 271, Sample Apartments, Sec-X" className={inputCls(undefined, true)} />
+                </Field>
+                <Row>
+                  <Field label="City / Town">
+                    <input {...register('city')} placeholder="Enter city" className={inputCls()} />
+                  </Field>
+                  <Field label="District">
+                    <input {...register('district')} placeholder="Enter district" className={inputCls()} />
+                  </Field>
+                </Row>
+                <Field label="Pincode">
+                  <input {...register('pincode')} placeholder="e.g. 201010" className={inputCls()} />
+                </Field>
+              </Section>
+            </div>
+            <div className="space-y-6">
+              <Section icon={Shield} title="Government ID">
+                <Row>
+                  <Field label="ID Type">
+                    <SelectField register={register('govtIdType')} options={GOVT_ID_TYPES} />
+                  </Field>
+                  <Field label="ID Number">
+                    <input {...register('govtIdNumber')} placeholder="Enter ID number" className={inputCls()} />
+                  </Field>
+                </Row>
+                <Row>
+                  <Field label="Expiry Date">
+                    <input {...register('idExpiryDate')} type="date" className={inputCls()} />
+                  </Field>
+                  <Field label="Issuing Country">
+                    <SelectField register={register('idIssuingCountry')} options={COUNTRIES} />
+                  </Field>
+                </Row>
+              </Section>
+            </div>
+          </div>
+        )}
 
-            {/* Visit */}
-            <Section icon={ClipboardList} title="Visit">
-              <Field label="Date of First Visit" icon={<Calendar className="h-4 w-4" />}>
-                <input {...register('dateOfFirstVisit')} type="date" className={inputCls(undefined, true)} />
-              </Field>
-              <Field label="Introduced By">
-                <div className="flex flex-wrap gap-2">
-                  {INTRODUCED_BY.map((opt) => (
-                    <label
-                      key={opt}
-                      className="group flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 hover:border-gray-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50/50 transition-all"
-                    >
-                      <input type="radio" value={opt} {...register('introducedBy')} className="peer sr-only" />
-                      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 peer-checked:border-brand-600 transition-all">
-                        <div className="h-2 w-2 rounded-full bg-brand-600 scale-0 peer-checked:scale-100 transition-transform" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-600 peer-checked:text-brand-700 transition-colors">{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <CheckboxCard label="First Timer" register={register('firstTimer')} />
-                <CheckboxCard label="Has Room in Ashram" register={register('hasRoomInAshram')} />
-              </div>
-              <CheckboxCard label="Banned" register={register('banned')} danger />
-            </Section>
-
-            {/* Documents */}
-            <Section icon={FileText} title="Documents">
-              {/* Photo upload */}
-              <Field label="Photo">
-                <label className="photo-upload relative flex h-32 w-full cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/30 transition-all overflow-hidden">
-                  {photoPreview ? (
-                    <img src={photoPreview} alt="Preview" className="h-full w-full object-contain" />
-                  ) : (
-                    <div className="text-center">
-                      <Camera className="h-8 w-8 text-gray-300 mx-auto" />
-                      <span className="text-[12px] text-gray-400 mt-1.5 block">Click to upload photo</span>
-                    </div>
-                  )}
-                  <div className="photo-overlay absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 transition-opacity">
-                    <Camera className="h-6 w-6 text-white" />
+        {/* Step 3: Visit & Other */}
+        {currentStep === 3 && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <Section icon={ClipboardList} title="Visit Information">
+                <Field label="Date of First Visit" icon={<Calendar className="h-4 w-4" />}>
+                  <input {...register('dateOfFirstVisit')} type="date" className={inputCls(undefined, true)} />
+                </Field>
+                <Field label="Introduced By">
+                  <div className="flex flex-wrap gap-2">
+                    {INTRODUCED_BY.map((opt) => (
+                      <label
+                        key={opt}
+                        className="group flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 hover:border-gray-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50/50 transition-all"
+                      >
+                        <input type="radio" value={opt} {...register('introducedBy')} className="peer sr-only" />
+                        <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 peer-checked:border-brand-600 transition-all">
+                          <div className="h-2 w-2 rounded-full bg-brand-600 scale-0 peer-checked:scale-100 transition-transform" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-600 peer-checked:text-brand-700 transition-colors">{opt}</span>
+                      </label>
+                    ))}
                   </div>
-                  <input type="file" accept="image/*" className="sr-only" onChange={handlePhoto} />
-                </label>
-              </Field>
-            </Section>
+                </Field>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <CheckboxCard label="First Timer" register={register('firstTimer')} />
+                  <CheckboxCard label="Has Room in Ashram" register={register('hasRoomInAshram')} />
+                </div>
+                <CheckboxCard label="Banned" register={register('banned')} danger />
+              </Section>
+              <Section icon={Settings} title="Other Information">
+                <Row>
+                  <Field label="Emergency Contact" icon={<Phone className="h-4 w-4" />}>
+                    <input {...register('emergencyContact')} type="tel" placeholder="+91 98765 43210" className={inputCls(undefined, true)} />
+                  </Field>
+                  <Field label="Ex-center Satsangi ID">
+                    <input {...register('exCenterSatsangiId')} placeholder="Enter ID if available" className={inputCls()} />
+                  </Field>
+                </Row>
+                <Field label="Email" error={errors.email?.message} icon={<Globe className="h-4 w-4" />}>
+                  <input {...register('email')} type="email" placeholder="user@example.com" className={inputCls(errors.email, true)} />
+                </Field>
+                <Field label="Notes">
+                  <textarea {...register('notes')} rows={3} placeholder="Any additional notes…" className={inputCls()} />
+                </Field>
+              </Section>
+            </div>
+            <div className="space-y-6">
+              <Section icon={FileText} title="Documents">
+                {/* Photo upload */}
+                <Field label="Photo">
+                  <label className="photo-upload relative flex h-32 w-full cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-brand-50/30 transition-all overflow-hidden">
+                    {photoPreview ? (
+                      <img src={photoPreview} alt="Preview" className="h-full w-full object-contain" />
+                    ) : (
+                      <div className="text-center">
+                        <Camera className="h-8 w-8 text-gray-300 mx-auto" />
+                        <span className="text-[12px] text-gray-400 mt-1.5 block">Click to upload photo</span>
+                      </div>
+                    )}
+                    <div className="photo-overlay absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 transition-opacity">
+                      <Camera className="h-6 w-6 text-white" />
+                    </div>
+                    <input type="file" accept="image/*" className="sr-only" onChange={handlePhoto} />
+                  </label>
+                </Field>
+              </Section>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Submit button */}
-        <div className="flex justify-end pt-6 mt-6 border-t border-gray-100">
-          <button
-            type="submit"
-            disabled={submitting}
-            className={clsx(
-              'flex items-center gap-2.5 rounded-xl px-6 py-2.5 text-sm font-semibold text-white',
-              'bg-brand-600 hover:bg-brand-700 active:bg-brand-800',
-              'shadow-sm shadow-brand-600/20 hover:shadow-md',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-              'transition-all duration-200',
+        {/* Navigation Buttons */}
+        <div className="flex justify-between pt-6 mt-6 border-t border-gray-100">
+          <div>
+            {currentStep > 1 && (
+              <button
+                type="button"
+                onClick={prevStep}
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 transition-all duration-200"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Previous
+              </button>
             )}
-          >
-            {submitting ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+          </div>
+          <div className="flex gap-3">
+            {currentStep < totalSteps ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="flex items-center gap-2.5 rounded-xl px-6 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 shadow-sm shadow-brand-600/20 hover:shadow-md transition-all duration-200"
+              >
+                Next
+                <ArrowLeft className="h-4 w-4 rotate-180" />
+              </button>
             ) : (
-              <><Send className="h-4 w-4" /> Register Devotee</>
+              <button
+                type="submit"
+                disabled={submitting}
+                className={clsx(
+                  'flex items-center gap-2.5 rounded-xl px-6 py-2.5 text-sm font-semibold text-white',
+                  'bg-brand-600 hover:bg-brand-700 active:bg-brand-800',
+                  'shadow-sm shadow-brand-600/20 hover:shadow-md',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'transition-all duration-200',
+                )}
+              >
+                {submitting ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+                ) : (
+                  <><Send className="h-4 w-4" /> Register Devotee</>
+                )}
+              </button>
             )}
-          </button>
+          </div>
         </div>
       </form>
     </div>

@@ -31,3 +31,4 @@ bun.lockb
 
 # uv
 uv.lock
+.env
