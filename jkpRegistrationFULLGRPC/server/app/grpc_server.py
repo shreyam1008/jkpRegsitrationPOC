@@ -1,19 +1,23 @@
-"""Pure gRPC server for JKP Satsangi Registration with PostgreSQL backend.
+"""Async gRPC server for JKP Satsangi Registration with PostgreSQL backend.
 
 This runs inside the same process as the grpc-web proxy (main.py).
-All DB work goes through the shared connection pool in db.py.
+All DB work goes through the shared async connection pool in db.py.
+
+Fully async: grpc.aio server + async servicer methods + async DB (psycopg v3).
+No ThreadPoolExecutor, no threads — everything runs on the event loop.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
-from concurrent import futures
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import grpc
+import grpc.aio
 from grpc_reflection.v1alpha import reflection
 
 # Ensure the server package is importable when run standalone
@@ -90,21 +94,24 @@ def _proto_to_create(req: satsangi_pb2.SatsangiCreate) -> SatsangiCreate:
 
 
 # ---------------------------------------------------------------------------
-# gRPC service implementation
+# Async gRPC service implementation
 # ---------------------------------------------------------------------------
 
 
 class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
-    """Implements the SatsangiService gRPC service backed by PostgreSQL."""
+    """Implements the SatsangiService gRPC service backed by PostgreSQL.
 
-    def CreateSatsangi(
+    All methods are async — they run on the event loop, never blocking threads.
+    """
+
+    async def CreateSatsangi(
         self,
         request: satsangi_pb2.SatsangiCreate,
-        context: grpc.ServicerContext,
+        context: grpc.aio.ServicerContext,
     ) -> satsangi_pb2.Satsangi:
         try:
             create_data = _proto_to_create(request)
-            satsangi = store.create_satsangi(create_data)
+            satsangi = await store.create_satsangi(create_data)
             return _model_to_proto(satsangi)
         except Exception as e:
             logger.exception("CreateSatsangi failed")
@@ -112,13 +119,13 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
             context.set_details(str(e))
             return satsangi_pb2.Satsangi()
 
-    def SearchSatsangis(
+    async def SearchSatsangis(
         self,
         request: satsangi_pb2.SearchRequest,
-        context: grpc.ServicerContext,
+        context: grpc.aio.ServicerContext,
     ) -> satsangi_pb2.SatsangiList:
         try:
-            results, total = store.search_satsangis(request.query)
+            results, total = await store.search_satsangis(request.query)
             return satsangi_pb2.SatsangiList(
                 satsangis=[_model_to_proto(s) for s in results],
                 total_count=total,
@@ -129,15 +136,15 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
             context.set_details(str(e))
             return satsangi_pb2.SatsangiList()
 
-    def ListSatsangis(
+    async def ListSatsangis(
         self,
         request: satsangi_pb2.ListRequest,
-        context: grpc.ServicerContext,
+        context: grpc.aio.ServicerContext,
     ) -> satsangi_pb2.SatsangiList:
         try:
             limit = request.limit if request.limit > 0 else 0
             offset = request.offset if request.offset > 0 else 0
-            results, total = store.get_all_satsangis(limit=limit, offset=offset)
+            results, total = await store.get_all_satsangis(limit=limit, offset=offset)
             return satsangi_pb2.SatsangiList(
                 satsangis=[_model_to_proto(s) for s in results],
                 total_count=total,
@@ -148,16 +155,15 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
             context.set_details(str(e))
             return satsangi_pb2.SatsangiList()
 
-    def Health(
+    async def Health(
         self,
         request: satsangi_pb2.HealthRequest,
-        context: grpc.ServicerContext,
+        context: grpc.aio.ServicerContext,
     ) -> satsangi_pb2.HealthResponse:
         db_ok = "unknown"
         try:
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
+            async with get_conn() as conn:
+                await conn.execute("SELECT 1")
             db_ok = "connected"
         except Exception:
             db_ok = "disconnected"
@@ -170,13 +176,13 @@ class SatsangiServiceServicer(satsangi_pb2_grpc.SatsangiServiceServicer):
 
 
 # ---------------------------------------------------------------------------
-# Server factory
+# Async server factory
 # ---------------------------------------------------------------------------
 
 
-def serve(port: int = 50051, max_workers: int = 10) -> grpc.Server:
-    """Create, configure, and start the gRPC server."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+async def serve(port: int = 50051) -> grpc.aio.Server:
+    """Create, configure, and start the async gRPC server."""
+    server = grpc.aio.server()
     satsangi_pb2_grpc.add_SatsangiServiceServicer_to_server(
         SatsangiServiceServicer(), server
     )
@@ -189,20 +195,24 @@ def serve(port: int = 50051, max_workers: int = 10) -> grpc.Server:
     reflection.enable_server_reflection(service_names, server)
 
     server.add_insecure_port(f"[::]:{port}")
-    server.start()
-    logger.info("gRPC server started on port %d", port)
+    await server.start()
+    logger.info("Async gRPC server started on port %d", port)
     return server
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     from app.db import close_pool, init_pool
-    init_pool()
-    s = serve()
-    print("gRPC server listening on port 50051")
-    try:
-        s.wait_for_termination()
-    except KeyboardInterrupt:
-        s.stop(grace=2)
-        close_pool()
-        print("\nServer stopped.")
+
+    async def main() -> None:
+        await init_pool()
+        s = await serve()
+        print("Async gRPC server listening on port 50051")
+        try:
+            await s.wait_for_termination()
+        except KeyboardInterrupt:
+            await s.stop(grace=2)
+            await close_pool()
+            print("\nServer stopped.")
+
+    asyncio.run(main())

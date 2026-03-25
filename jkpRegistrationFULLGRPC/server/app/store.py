@@ -1,14 +1,14 @@
-"""PostgreSQL-backed storage for satsangi records.
+"""Async PostgreSQL-backed storage for satsangi records (psycopg v3).
 
-All functions borrow a connection from the shared pool (db.get_conn)
-and return it automatically via the context manager.
+All functions borrow an async connection from the shared pool (db.get_conn)
+and return it automatically via the async context manager.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import psycopg2.extras
+from psycopg.rows import dict_row
 
 from app.db import get_conn
 from app.models import Satsangi, SatsangiCreate
@@ -64,7 +64,7 @@ _SEARCH_SQL = f"""
 """
 
 _LIST_SQL = f"SELECT {_COLS} FROM satsangis ORDER BY created_at DESC"
-_COUNT_SQL = "SELECT COUNT(*) FROM satsangis"
+_COUNT_SQL = "SELECT COUNT(*) AS count FROM satsangis"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,45 +80,45 @@ def _row_to_satsangi(row: dict[str, Any]) -> Satsangi:
 
 
 # ---------------------------------------------------------------------------
-# Public API (called by grpc_server.py)
+# Public API (called by grpc_server.py) — all async
 # ---------------------------------------------------------------------------
 
 
-def create_satsangi(data: SatsangiCreate) -> Satsangi:
+async def create_satsangi(data: SatsangiCreate) -> Satsangi:
     """Insert a new satsangi into the database and return it."""
     satsangi = Satsangi(**data.model_dump())
     values = [getattr(satsangi, f) for f in _INSERT_FIELDS]
 
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(_INSERT_SQL, values)
-            row = cur.fetchone()
-        conn.commit()
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(_INSERT_SQL, values)
+            row = await cur.fetchone()
         return _row_to_satsangi(row)
 
 
-def search_satsangis(query: str) -> tuple[list[Satsangi], int]:
+async def search_satsangis(query: str) -> tuple[list[Satsangi], int]:
     """Search satsangis using ILIKE across multiple fields. Returns (results, total_count)."""
     if not query.strip():
-        return get_all_satsangis()
+        return await get_all_satsangis()
 
     pattern = f"%{query.strip()}%"
     params = [pattern] * 12
 
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(_SEARCH_SQL, params)
-            rows = cur.fetchall()
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(_SEARCH_SQL, params)
+            rows = await cur.fetchall()
         results = [_row_to_satsangi(row) for row in rows]
         return results, len(results)
 
 
-def get_all_satsangis(limit: int = 0, offset: int = 0) -> tuple[list[Satsangi], int]:
+async def get_all_satsangis(limit: int = 0, offset: int = 0) -> tuple[list[Satsangi], int]:
     """Return satsangis, newest first. Returns (results, total_count)."""
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(_COUNT_SQL)
-            total = cur.fetchone()["count"]
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(_COUNT_SQL)
+            count_row = await cur.fetchone()
+            total = count_row["count"] if count_row else 0
 
             sql = _LIST_SQL
             params: list[Any] = []
@@ -129,6 +129,6 @@ def get_all_satsangis(limit: int = 0, offset: int = 0) -> tuple[list[Satsangi], 
                 sql += " OFFSET %s"
                 params.append(offset)
 
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+            await cur.execute(sql, params)
+            rows = await cur.fetchall()
         return [_row_to_satsangi(row) for row in rows], total

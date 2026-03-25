@@ -1,36 +1,33 @@
-"""PostgreSQL connection pool and schema management.
+"""Async PostgreSQL connection pool and schema management (psycopg v3).
 
 Resilience:
   • init_pool retries up to 5 times (2 s backoff) so the server survives
     a DB that isn't ready yet at boot (common with Docker Compose).
-  • get_conn validates the borrowed connection with a lightweight query.
-    If it's dead, the bad conn is discarded and a fresh one is fetched.
-  • If the entire pool is dead (closeall'd / corrupted), get_conn
-    transparently recreates it.
+  • AsyncConnectionPool auto-validates and recycles dead connections.
+  • All I/O is non-blocking — never stalls the event loop.
 """
 
 from __future__ import annotations
 
-import contextlib
+import asyncio
 import logging
 import os
-import threading
-import time
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
-import psycopg2
-import psycopg2.extensions
-from psycopg2 import pool
+from psycopg import AsyncConnection, OperationalError
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 
 logger = logging.getLogger(__name__)
 
-DB_CONFIG = {
-    "host": os.environ.get("DB_HOST", "localhost"),
-    "port": int(os.environ.get("DB_PORT", "5432")),
-    "dbname": os.environ.get("DB_NAME", "jkp_reg_poc_grpc"),
-    "user": os.environ.get("DB_USER", "postgres"),
-    "password": os.environ.get("DB_PASSWORD", "postgres"),
-}
+DB_CONNINFO = (
+    f"host={os.environ.get('DB_HOST', 'localhost')} "
+    f"port={os.environ.get('DB_PORT', '5432')} "
+    f"dbname={os.environ.get('DB_NAME', 'jkp_reg_poc_grpc')} "
+    f"user={os.environ.get('DB_USER', 'postgres')} "
+    f"password={os.environ.get('DB_PASSWORD', 'postgres')}"
+)
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS satsangis (
@@ -78,93 +75,65 @@ CREATE INDEX IF NOT EXISTS idx_satsangis_email
 """
 
 # ---------------------------------------------------------------------------
-# Thread-safe connection pool with retry and auto-reconnect
+# Async connection pool (created once at startup)
 # ---------------------------------------------------------------------------
 
-_pool: pool.ThreadedConnectionPool | None = None
-_pool_lock = threading.Lock()
-_pool_minconn: int = 2
-_pool_maxconn: int = 20
+_pool: AsyncConnectionPool | None = None
 
 
-def _create_pool(minconn: int, maxconn: int) -> pool.ThreadedConnectionPool:
-    """Low-level pool creation (no retry, no schema init)."""
-    return pool.ThreadedConnectionPool(minconn, maxconn, **DB_CONFIG)
-
-
-def init_pool(
-    minconn: int = 2,
-    maxconn: int = 20,
+async def init_pool(
+    min_size: int = 2,
+    max_size: int = 20,
     retries: int = 5,
     backoff: float = 2.0,
 ) -> None:
-    """Create the connection pool and initialize the DB schema.
+    """Create the async connection pool and initialize the DB schema.
 
     Retries up to *retries* times with exponential backoff so the server
     can start even when the DB container is still booting.
     """
-    global _pool, _pool_minconn, _pool_maxconn
-    _pool_minconn, _pool_maxconn = minconn, maxconn
+    global _pool
 
     for attempt in range(1, retries + 1):
         try:
-            _pool = _create_pool(minconn, maxconn)
-            conn = _pool.getconn()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(CREATE_TABLE_SQL)
-                conn.commit()
-            finally:
-                _pool.putconn(conn)
-            logger.info("DB pool created (%d–%d conns), schema initialized", minconn, maxconn)
+            _pool = AsyncConnectionPool(
+                conninfo=DB_CONNINFO,
+                min_size=min_size,
+                max_size=max_size,
+                open=False,
+            )
+            await _pool.open()
+            # Initialize schema
+            async with _pool.connection() as conn:
+                await conn.execute(CREATE_TABLE_SQL)
+            logger.info("DB pool created (%d–%d conns), schema initialized", min_size, max_size)
             return
-        except psycopg2.OperationalError:
+        except OperationalError:
             if attempt == retries:
                 raise
             wait = backoff * attempt
-            logger.warning("DB not ready (attempt %d/%d), retrying in %.1fs…", attempt, retries, wait)
-            time.sleep(wait)
+            logger.warning(
+                "DB not ready (attempt %d/%d), retrying in %.1fs…", attempt, retries, wait
+            )
+            await asyncio.sleep(wait)
 
 
-def close_pool() -> None:
+async def close_pool() -> None:
     """Shut down the pool (call on app exit)."""
     global _pool
-    with _pool_lock:
-        if _pool:
-            _pool.closeall()
-            _pool = None
+    if _pool:
+        await _pool.close()
+        _pool = None
 
 
-def _ensure_pool() -> pool.ThreadedConnectionPool:
-    """Return the live pool, recreating it if it was lost."""
-    global _pool
-    if _pool is not None:
-        return _pool
-    with _pool_lock:
-        if _pool is None:
-            logger.warning("DB pool lost — recreating (%d–%d)", _pool_minconn, _pool_maxconn)
-            _pool = _create_pool(_pool_minconn, _pool_maxconn)
-        return _pool
+@asynccontextmanager
+async def get_conn() -> AsyncGenerator[AsyncConnection, None]:
+    """Borrow an async connection from the pool; auto-returns on exit.
 
-
-@contextlib.contextmanager
-def get_conn() -> Generator[psycopg2.extensions.connection, None, None]:
-    """Borrow a connection from the pool; auto-returns on exit.
-
-    If the borrowed connection is dead (server restarted, network blip),
-    it is discarded and a fresh one is fetched — one automatic retry.
+    The pool handles liveness checks and stale connection replacement
+    automatically via its built-in health-check mechanism.
     """
-    p = _ensure_pool()
-    conn = p.getconn()
-    try:
-        # Lightweight liveness check (costs ~0.1 ms on localhost)
-        conn.cursor().execute("SELECT 1")
-    except (psycopg2.OperationalError, psycopg2.InterfaceError):
-        # Connection is dead — throw it away and get a new one
-        logger.warning("Stale DB connection detected — replacing")
-        p.putconn(conn, close=True)
-        conn = p.getconn()
-    try:
+    if _pool is None:
+        raise RuntimeError("DB pool not initialized — call init_pool() first")
+    async with _pool.connection() as conn:
         yield conn
-    finally:
-        p.putconn(conn)

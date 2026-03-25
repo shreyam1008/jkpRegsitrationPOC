@@ -7,14 +7,15 @@ Architecture:
       ↓  HTTP/1.1 reverse_proxy
   THIS PROXY  (:8080, uvicorn async)
       ↓  HTTP/2 multiplexed via singleton channel
-  gRPC SERVER (:50051, in-process, ThreadPoolExecutor)
-      ↓  pooled connection
+  gRPC SERVER (:50051, in-process, grpc.aio async)
+      ↓  async pooled connection (psycopg v3)
   PostgreSQL
 
 Performance notes:
+  • Fully async end-to-end — proxy, gRPC server, and DB are all non-blocking
   • Async gRPC channel (grpc.aio) — non-blocking, never stalls the event loop
   • Singleton channel — one TCP conn, HTTP/2 multiplexes all RPCs
-  • DB connection pool — 2–20 conns, zero connect overhead per request
+  • Async DB connection pool (psycopg v3) — 2–20 conns, zero connect overhead
   • Pre-built OK trailer — allocated once, reused every successful response
   • Identity serializers — no copy, pass raw protobuf bytes through
   • Single uvicorn process — no fork, no port clash on :50051
@@ -77,23 +78,23 @@ def _get_channel() -> grpc.aio.Channel:
 # Lifecycle: DB pool → gRPC server → channel  (all created once at startup)
 # ---------------------------------------------------------------------------
 
-_grpc_server: grpc.Server | None = None
+_grpc_server: grpc.aio.Server | None = None
 
 
 @contextlib.asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     global _grpc_server, _channel
-    init_pool(minconn=2, maxconn=20)
-    _grpc_server = start_grpc_server(port=50051)
+    await init_pool(min_size=2, max_size=20)
+    _grpc_server = await start_grpc_server(port=50051)
     _channel = _get_channel()
-    logger.info("Ready — pool(2-20) + gRPC(:50051) + proxy(:8080)")
+    logger.info("Ready — async pool(2-20) + async gRPC(:50051) + proxy(:8080)")
     yield
     if _grpc_server:
-        _grpc_server.stop(grace=2)
+        await _grpc_server.stop(grace=2)
     if _channel:
         await _channel.close()
         _channel = None
-    close_pool()
+    await close_pool()
 
 
 app = FastAPI(title="JKP Registration — grpc-web Proxy", lifespan=lifespan)
