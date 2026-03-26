@@ -52,9 +52,9 @@ req.setLastName("Sharma")
 # Extracts protobuf from gRPC-web frame
 proto_payload = _decode_grpc_web_frame(body)
 
-# Forwards to gRPC server via HTTP/2
-channel = grpc.insecure_channel("localhost:50051")
-response = channel.unary_unary(method)(proto_payload)
+# Forwards to gRPC server via HTTP/2 (async channel)
+channel = grpc.aio.insecure_channel("localhost:50051")
+response = await channel.unary_unary(method)(proto_payload)
 ```
 
 ### 3. gRPC Server (Port 50051)
@@ -63,10 +63,10 @@ response = channel.unary_unary(method)(proto_payload)
 # - Receives HTTP/2 stream
 # - Deserializes binary → SatsangiCreate object
 # - Calls your service method
-def CreateSatsangi(self, request, context):
+async def CreateSatsangi(self, request, context):
     # request is typed object, not binary!
     create_data = _proto_to_create(request)
-    return store.create_satsangi(create_data)
+    return await store.create_satsangi(create_data)
 ```
 
 ## Protocol Buffers: The Type System
@@ -106,22 +106,18 @@ request.last_name = "Sharma"
 binary = request.SerializeToString()
 ```
 
-#### Client-side (TypeScript) — currently hand-written (TODO: automate)
+#### Client-side (TypeScript) — auto-generated via `@connectrpc/connect` + buf
 ```typescript
-// Hand-written classes using google-protobuf
-export class SatsangiCreate extends jspb.Message {
-  getFirstName(): string { return _get(this, 1, '') as string }
-  setFirstName(v: string) { _set(this, 1, v) }
-  // ... 29 more fields
-}
+// Auto-generated types from satsangi.proto via buf
+import { createSatsangi } from "./api";
 
-// Usage in React
-const req = new SatsangiCreate()
-req.setFirstName("Ravi")
-req.setLastName("Sharma")
+// Usage in React — plain objects, fully typed
+await createSatsangi({
+  firstName: "Ravi",
+  lastName: "Sharma",
+  phoneNumber: "9876543210",
+});
 ```
-
-> **TODO**: wire up a protobuf TS generator (e.g., `protoc-gen-ts`, `ts-proto`, or `buf`) so browser classes stay auto-synced with `satsangi.proto` just like the server.
 
 ### Why Protobuf is Faster
 
@@ -248,7 +244,7 @@ jkpRegistrationFULLGRPC/
 ```bash
 # Terminal 1: Start both proxy and gRPC server
 cd jkpRegistrationFULLGRPC/server
-uv run python -m uvicorn app.main:app --port 8080
+uv run task dev
 
 # Terminal 2: Start React client
 cd jkpRegistrationFULLGRPC/client

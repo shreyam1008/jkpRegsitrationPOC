@@ -86,6 +86,9 @@ A server is **only** exposed to the public internet if:
 1. You explicitly open your network firewalls to allow outside traffic in.
 2. You put the domain in a public, global DNS registry pointing to a public IP.
 
+> **Note:** If the app is to be hosted publicly on a public domain, we can expose just the HTTP port and let services like Cloudflare Tunnel or Tailscale Funnel handle the reverse proxy. These services create an encrypted tunnel from your server to their edge network, meaning you don't need to open firewall ports or manage SSL certificates yourself—the traffic cop lives in the cloud and forwards requests securely to your local machine.
+
+
 ---
 
 ## 5. Python Concurrency & The GIL (Why Web Servers Block)
@@ -127,7 +130,7 @@ To solve the multi-processing bottleneck, we use a concept called **Decoupling**
 
 When a system is slow, the immediate reaction is often "add Redis". However, caching exists in tiers. The closer to the user you cache, the faster and cheaper it is.
 
-1. **Browser Caching (The Client):** The absolute fastest cache. Tools like React Query save database responses in the browser's RAM. If a user clicks "India" twice, the second click instantly loads the states from local RAM without touching the network.
+1. **Browser Caching (The Client):** The absolute fastest cache. Tools like React Query save database responses in the browser's RAM. If a user clicks "India" twice, the second click instantly loads the states from local RAM without touching the network. We also preload some data on RAM on load like some common lookup tables and whole satsangee list. 
 2. **Edge Web Server Caching (Nginx/Caddy):** The reverse proxy remembers HTTP `GET` responses. However, because gRPC uses `POST` requests with binary data, edge caching is usually technically impossible for gRPC APIs.
 3. **In-Memory Server Caching (Python):** Using decorators like `@lru_cache`, the Python process saves data in its own RAM. It bypasses the database completely. The downside is that if you have 4 worker processes, they don't share this memory (Process A doesn't know what Process B cached).
 4. **Distributed Caching (Redis):** A dedicated, centralized, lightning-fast RAM database. All 4 Python processes connect to it. It is required when data *must* be instantly consistent across all processes (like Rate Limiting or Session Management), but it adds significant infrastructure complexity.

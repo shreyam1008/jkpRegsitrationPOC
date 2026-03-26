@@ -14,14 +14,24 @@ This document outlines the strict coding standards and architectural boundaries 
 ---
 
 ## 2. Frontend Standards (React / TypeScript)
-
+<!-- work later.  -->
 The frontend is a single-page application focused on high-speed data entry and validation.
 
 ### 2.1 Core Stack
-*   **Framework:** React 18+
-*   **Language:** Strict TypeScript
-*   **Styling:** TailwindCSS
-*   **Component Library:** `shadcn/ui` (Radix UI primitives)
+*   **Language:** Strict TypeScript(6.0)
+*   **Framework:** React 19.2+
+*   **Styling:** TailwindCSS (4.2)
+*   **Data Fetching & Caching:** TanStack Query
+*   **Virtualization:** TanStack Virtual (for rendering large lists smoothly)
+*   **Package Manager:** Bun
+*   **Routing:** TanStack Router
+*   **Forms:** React Hook Form
+*   **State Management:** React Context
+*   **Animations:** Native CSS/JS (GPU accelerated)
+*   **Formatter/Linter:** oxfmt / oxlint 
+*   **Dev Server:** Vite
+
+
 
 ### 2.2 TypeScript Rules
 *   **No `any`:** The use of `any` is strictly prohibited. If a type is truly unknown, use `unknown` and perform runtime type narrowing.
@@ -38,6 +48,7 @@ The frontend is a single-page application focused on high-speed data entry and v
 
 ### 2.5 Structure
 *   **Feature-First Organization:** Organize the `src` directory by feature domain (e.g., `src/features/satsangi-registration/`, `src/features/dashboard/`) rather than flat technical directories (e.g., putting all components in one folder, all hooks in another).
+<!-- With the scope of project, the core part being inconnected to one other will be best to put in flat structure. things like printer feature. Else for our scope, some hybrid approach with  core feature being in flat structure with dir structure to isolate some big components and pages but apis, hooks, utils can be flat structure.   -->
 *   **UI Primitives:** Keep all reusable, dumb UI components (buttons, inputs) in `src/components/ui/`.
 
 ---
@@ -49,12 +60,12 @@ The backend prioritizes type-safety, performance, and strict separation of conce
 ### 3.1 Core Stack
 *   **Language:** Python 3.10+
 *   **Primary API Framework:** `grpcio` (Native gRPC)
-*   **Proxy/HTTP Framework:** `FastAPI` (Strictly limited to the grpc-web proxy and specific HTTP-only endpoints like Webhooks)
+*   **Proxy/HTTP Framework:** `FastAPI` (Strictly limited to the grpc-web proxy and specific HTTP-only endpoints like Webhooks, and REST be used by fastapi only in need basis like exposing api to other apps)
 *   **Database:** PostgreSQL (accessed via SQLAlchemy or raw async drivers)
 
 ### 3.2 Python Rules
 *   **Strict Type Hinting:** Mandatory for all function arguments and return types. Use the `typing` module extensively.
-*   **Formatting:** Code must be auto-formatted using `black`, imports sorted by `isort`, and type-checked in CI/CD using `mypy`.
+*   **Formatting:** Code must be auto-formatted and linted using `ruff` (format + lint + import sorting), and type-checked in CI/CD using `mypy`.
 
 ### 3.3 Architectural Boundaries
 *   **Separation of Protobuf:** Keep `protobuf` generated files (`_pb2.py`, `_pb2_grpc.py`) strictly isolated in an `api/` or `generated/` directory. Do not mix business logic into these generated files.
@@ -62,5 +73,5 @@ The backend prioritizes type-safety, performance, and strict separation of conce
 
 ### 3.4 Data & Concurrency
 *   **Streaming & Generators:** Avoid loading massive datasets (e.g., 50,000 rows) directly into RAM. Use database cursors and Python generators (`yield`) to stream data.
-*   **Connection Pooling:** All database interactions must use a robust connection pool (e.g., `PgBouncer` or SQLAlchemy's built-in pool) to prevent connection exhaustion.
-*   **Background Tasks:** Any task that takes longer than 1-2 seconds (e.g., ETL scripts, CSV exports, bulk notifications) MUST be decoupled from the gRPC request-response cycle. Push the task to the PostgreSQL-backed Background Queue and return an immediate response to the client.
+*   **Connection Pooling:** All database interactions must use a robust connection pool (e.g., `psycopg v3`, `PgBouncer`, or SQLAlchemy's built-in pool) to prevent connection exhaustion.
+*   **Background Tasks:** Any task that takes longer than 1-2 seconds (e.g., ETL scripts, CSV exports, bulk notifications, image compression, document encryption) MUST be decoupled from the gRPC request-response cycle. Push the task to the another threda asyncio.to_thread() or PostgreSQL-backed Background Queue.

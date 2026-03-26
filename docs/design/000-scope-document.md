@@ -21,7 +21,7 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 - Self-hosted PostgreSQL database for structured data.
 - Self-hosted S3-compatible object storage (MinIO) for heavy media files (photos/ID proofs).
 - Dedicated Python ETL scripts for the one-time migration of 200,000 legacy registration records.
-- Automated interval backups (e.g., 3-hour `pg_dump` snapshots and MinIO syncs) to a secondary in-house server. (Continuous WAL archiving is a "nice-to-have" secondary goal).
+- Automated interval backups (e.g., 3-hour `pg_dump` snapshots and MinIO syncs) to a secondary in-house server. (Continuous WAL to remote server to also work as analytics server/quick backup.).
 - gRPC backend for strict type-safety and high performance.
 - PostgreSQL-backed Background Task Queue for processing heavy synchronous workloads (e.g., massive CSV exports) without blocking the primary web threads.
 - Browser-side and Python In-Memory caching for static UI data (e.g., Country/State dropdowns).
@@ -31,6 +31,8 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 - Native mobile applications (iOS/Android).
 - Complex multi-faceted search engines (like Elasticsearch).
 - Dedicated Distributed Caching or complex Message Brokers (Redis, RabbitMQ) unless absolutely forced by scale.
+- **API Endpoints:** REST/grpc API endpoints which other apps across ashram(eg, pledge, donation, accommodation etc) can use per need basis.
+- **Automated Recognization:** QR code / Facial recognization of person to open a person's profile for visit entry/extension.
 
 ## Phase 2: Public Expansion (Future Capability)
 The architecture designed in Phase 1 intentionally supports these future requirements without requiring a foundational rewrite.

@@ -31,7 +31,7 @@ User's Browser (React App)
 │           │ (3) Native gRPC                            │
 │           ▼                                            │
 │ ┌────────────────────────────────────────────────────┐ │
-│ │ Backend gRPC Server (Python/grpcio)                │ │
+│ │ Backend gRPC Server (Python/grpcio.aio, async)      │ │
 │ │ - Validates Keycloak Auth JWT                      │ │
 │ │ - Dispatches async jobs to Queue                   │ │
 │ └─────────┬──────────────────────────────────────────┘ │
