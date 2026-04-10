@@ -8,7 +8,8 @@ Instead of duplicating the rules here, you MUST read the comprehensive guideline
 **Location of Rules:** `@docs/design/005-coding-standards.md`
 
 Always refer to the above file for constraints regarding:
-- Allowed dependencies and framework versions (React/FastAPI/gRPC).
-- TypeScript strictness and state management.
-- Python formatting, connection pooling, and queueing requirements.
-- The separation of gRPC and FastAPI boundaries.
+- Allowed dependencies and framework versions (React/ASP.NET Core).
+- TypeScript strictness, state management, and REST API communication via TanStack Query.
+- C# nullable references, async patterns, EF Core usage, and DI requirements.
+- REST-first API strategy with optional gRPC for perf-critical endpoints.
+- Object storage (SeaweedFS) and authentication (ASP.NET Identity) standards.

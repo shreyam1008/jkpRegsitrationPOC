@@ -15,16 +15,16 @@ The primary objective of Phase 1 is to replace legacy systems with a modern, fas
 - Responsive Web Application (React) accessible via PC browsers.
 - Multi-step registration workflow for new Satsangis.
 - Form C data capture and document storage specifically for the registration of foreign nationals.
-- Centralized organization-wide authentication using a self-hosted identity provider (Keycloak), establishing the foundation for SSO across all future internal apps.
+- Authentication using ASP.NET Identity (Phase 1). SSO for future org apps via OpenIddict or Keycloak (Phase 2).
 - Secure internal access via Site-to-Site VPN across all offices, utilizing an Internal DNS (e.g., `registration.jkp.internal`) to map domain names without public internet exposure.
-- Two-Server Split Topology: A stateless Compute Server (App/Proxy) and a Stateful Server (PostgreSQL/MinIO).
+- Two-Server Split Topology: A stateless Compute Server (ASP.NET Core) and a Stateful Server (PostgreSQL/SeaweedFS).
 - Self-hosted PostgreSQL database for structured data.
-- Self-hosted S3-compatible object storage (MinIO) for heavy media files (photos/ID proofs).
-- Dedicated Python ETL scripts for the one-time migration of 200,000 legacy registration records.
-- Automated interval backups (e.g., 3-hour `pg_dump` snapshots and MinIO syncs) to a secondary in-house server. (Continuous WAL to remote server to also work as analytics server/quick backup.).
-- gRPC backend for strict type-safety and high performance.
+- Self-hosted S3-compatible object storage (SeaweedFS) for heavy media files (photos/ID proofs).
+- Dedicated ETL scripts for the one-time migration of 200,000 legacy registration records.
+- Automated interval backups (e.g., 3-hour `pg_dump` snapshots and SeaweedFS syncs) to a secondary in-house server. (Continuous WAL to remote server to also work as analytics server/quick backup.).
+- REST API backend (ASP.NET Core) with gRPC available as an upgrade path for performance-critical endpoints.
 - PostgreSQL-backed Background Task Queue for processing heavy synchronous workloads (e.g., massive CSV exports) without blocking the primary web threads.
-- Browser-side and Python In-Memory caching for static UI data (e.g., Country/State dropdowns).
+- Browser-side and server In-Memory caching for static UI data (e.g., Country/State dropdowns).
 
 **Out-of-Scope for Phase 1:**
 - Public self-registration.
