@@ -2,7 +2,7 @@
 
 This document records the architectural decisions made as part of the backend migration to .NET Core (ASP.NET Core). It covers why the switch was made, what .NET provides natively that previously required external tooling, and the evaluation of key infrastructure components (API strategy, object storage, authentication, queuing).
 
-> The original Python-era decisions are preserved in `002-architectural-choices.md` and `003-web-hosting-concepts.md` for historical reference. This document supersedes those for all forward-looking architectural guidance.
+> The original Python-era decisions are archived in `archive/002-architectural-choices.md`, `archive/003-web-hosting-concepts.md`, and `archive/004-grpc-architecture-guide.md` for historical reference only. This document supersedes those for all forward-looking architectural guidance.
 
 ---
 

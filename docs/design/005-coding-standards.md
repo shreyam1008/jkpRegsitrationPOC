@@ -14,7 +14,6 @@ This document outlines the strict coding standards and architectural boundaries 
 ---
 
 ## 2. Frontend Standards (React / TypeScript)
-<!-- work later.  -->
 The frontend is a single-page application focused on high-speed data entry and validation.
 
 ### 2.1 Core Stack
@@ -58,7 +57,7 @@ The frontend is a single-page application focused on high-speed data entry and v
 The backend prioritizes compile-time type-safety, performance, and strict separation of concerns.
 
 ### 3.1 Core Stack
-*   **Language:** C# 12+ (.NET 8 LTS or later)
+*   **Language:** C# 14 (.NET 10 LTS)
 *   **Framework:** ASP.NET Core (REST API via Minimal APIs or Controllers, with optional gRPC for perf-critical endpoints)
 *   **API Documentation:** Swagger/OpenAPI auto-generated from controllers/DTOs.
 *   **gRPC (Optional):** `grpc-dotnet` available for bulk data transfer, server-to-server calls, or streaming. Can coexist with REST in the same project.
@@ -86,3 +85,30 @@ The backend prioritizes compile-time type-safety, performance, and strict separa
 *   **Streaming:** Avoid loading massive datasets (e.g., 50,000 rows) directly into RAM. Use `IAsyncEnumerable<T>` and EF Core's `AsAsyncEnumerable()` to stream data.
 *   **Connection Pooling:** EF Core manages connection pooling via `Npgsql`. Do not create raw `NpgsqlConnection` instances outside of the DI-managed `DbContext`.
 *   **Background Tasks:** Any task that takes longer than 1-2 seconds (e.g., ETL scripts, CSV exports, bulk notifications, image compression) MUST be offloaded to a `BackgroundService` via `Channel<T>`. The API handler must return immediately after enqueuing the task.
+
+---
+
+## 4. AI-Assisted Development
+
+AI coding assistants (Copilot, Cascade, etc.) are a core part of our development workflow. The goal is to write code that an AI review pass would find **zero structural issues** in — no shortcuts, no anti-patterns, no "it works but it's wrong."
+
+### 4.1 AI as the Default Workflow
+*   **Use AI for writing, reviewing, and refactoring.** Leverage AI tools for boilerplate generation, code review, test scaffolding, and refactoring suggestions. Do not manually write repetitive code that an AI can generate correctly.
+*   **Follow framework idioms.** Always use the canonical, recommended patterns for ASP.NET Core, EF Core, React, and TanStack Query. If the framework provides a standard way to do something, use it — do not invent custom abstractions. AI tools are trained on idiomatic code and will produce better results when the codebase follows conventions.
+*   **Trust the tooling, verify the output.** AI-generated code must still pass the same quality bar as hand-written code. Review every suggestion for correctness, security, and adherence to these standards before accepting.
+
+### 4.2 The AI-Auditable Quality Bar
+Code must be written such that an automated AI review would find **no structural flaws**. Specifically:
+
+*   **No dead code.** Remove unused variables, unreachable branches, commented-out blocks, and orphaned functions. If code is not called, it does not exist.
+*   **No magic numbers or strings.** Extract constants with descriptive names. Configuration values belong in `appsettings.json` or environment variables, never hardcoded.
+*   **No missing error handling.** Every external call (database, HTTP, file I/O) must have explicit error handling. No empty `catch {}` blocks. No swallowed exceptions.
+*   **No inconsistent naming.** Follow C# naming conventions (`PascalCase` for public members, `_camelCase` for private fields, `camelCase` for local variables). Follow TypeScript conventions (`camelCase` for variables/functions, `PascalCase` for types/components).
+*   **No poor separation of concerns.** Controllers must not contain business logic. Services must not contain HTTP concerns. Components must not contain API call logic directly.
+*   **No suppressed warnings.** Do not use `#pragma warning disable`, `// eslint-disable`, `@ts-ignore`, or `SuppressMessage` unless there is a documented, justified reason in a code comment directly above.
+
+### 4.3 Self-Documenting Code
+*   **Meaningful names over comments.** A well-named function, variable, or class should make its purpose obvious without a comment. Comments explain *why*, never *what*.
+*   **Small, focused functions.** Each function should do one thing. If a function needs a comment to explain what it does, it should be split into smaller functions with descriptive names.
+*   **Strong types as documentation.** Use specific types (`SatsangiId`, `EmailAddress`) over primitive types (`int`, `string`) at domain boundaries where it improves clarity. DTOs and request/response models should have self-explanatory property names.
+
